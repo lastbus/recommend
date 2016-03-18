@@ -64,22 +64,6 @@ object BuyGoodsSimilarity {
 
     if (!outPath.startsWith("/")) result.take(50).foreach(println)
     else result.saveAsTextFile(outPath)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   }
 
 }

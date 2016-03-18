@@ -10,8 +10,6 @@ import scala.xml.XML
 object ItemSimilarityConf {
 
   var confMap: mutable.HashMap[String, String] = _
-
-
   def loadConf(path: String): Unit = {
     val xml =
       try{

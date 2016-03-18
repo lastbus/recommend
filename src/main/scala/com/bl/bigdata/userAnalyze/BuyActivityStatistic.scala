@@ -42,21 +42,31 @@ object BuyActivityStatistic {
       .map{ case (category, time, behavior) => (category, time)}
 
     // 统计上午、下午、晚上 购买类目top 10
-    val morningRDD = rawRDD.filter{ case (category, time) => time >= "08" & time <= "12:00:00.0"}
-      .map{ s => (s._1, 1)}.reduceByKey(_ + _).collect().sortWith(_._2 >= _._2).take(10).foreach(println)
+    val morningRDD = rawRDD
+                    .filter{ case (category, time) => time >= "08" & time <= "12:00:00.0"}
+                    .map{ s => (s._1, 1)}
+                    .reduceByKey(_ + _)
+                    .collect().sortWith(_._2 >= _._2)
+                    .take(10)
+                    .foreach(println)
     println("============")
-    val noonRDD = rawRDD.filter{ case (category, time) => time >= "12" & time <= "18:00:00.0"}
-      .map{ s => (s._1, 1)}.reduceByKey(_ + _).collect().sortWith(_._2 >= _._2).take(10).foreach(println)
+    val noonRDD = rawRDD
+                  .filter{ case (category, time) => time >= "12" & time <= "18:00:00.0"}
+                  .map{ s => (s._1, 1)}
+                  .reduceByKey(_ + _)
+                  .collect()
+                  .sortWith(_._2 >= _._2)
+                  .take(10)
+                  .foreach(println)
     println("============")
-    val nightRDD = rawRDD.filter{ case (category, time) => time >= "18" | time <= "08"}
-      .map{ s => (s._1, 1)}.reduceByKey(_ + _).collect().sortWith(_._2 >= _._2).take(10).foreach(println)
-
-
-
-
-
-
-
+    val nightRDD = rawRDD
+                   .filter{ case (category, time) => time >= "18" | time <= "08"}
+                   .map{ s => (s._1, 1)}
+                   .reduceByKey(_ + _)
+                   .collect()
+                   .sortWith(_._2 >= _._2)
+                   .take(10)
+                   .foreach(println)
   }
 
 }
