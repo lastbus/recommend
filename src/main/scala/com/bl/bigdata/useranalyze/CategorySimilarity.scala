@@ -1,4 +1,4 @@
-package com.bl.bigdata.userAnalyze
+package com.bl.bigdata.useranalyze
 
 import org.apache.spark.{SparkContext, SparkConf}
 
