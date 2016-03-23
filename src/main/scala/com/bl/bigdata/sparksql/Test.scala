@@ -1,4 +1,4 @@
-package com.bl.bigdata.sparkSQL
+package com.bl.bigdata.sparksql
 
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
