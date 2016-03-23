@@ -44,25 +44,34 @@
 
   <dependencies>
     <!--  本地运行测试把用到的hadoop相关jar包依赖“<scope>provide</scope>”注释掉，否则无法运行。 -->
-    <!--<dependency>-->
-      <!--<groupId>org.apache.logging.log4j</groupId>-->
-      <!--<artifactId>log4j</artifactId>-->
-      <!--<version>2.5</version>-->
-    <!--</dependency>-->
-    <!-- hadoop -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+      <version>2.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+      <version>2.5</version>
+    </dependency>
+
+    <dependency>
+      <groupId>commons-pool</groupId>
+      <artifactId>commons-pool</artifactId>
+      <version>1.5.4</version>
+    </dependency>
     <!--<dependency>-->
       <!--<groupId>org.apache.hadoop</groupId>-->
       <!--<artifactId>hadoop-common</artifactId>-->
       <!--<version>2.6.0</version>-->
       <!--<scope>provided</scope>-->
     <!--</dependency>-->
-    <!--<dependency>-->
-      <!--<groupId>org.apache.hadoop</groupId>-->
-      <!--<artifactId>hadoop-core</artifactId>-->
-      <!--<version>2.6.0</version>-->
-      <!--<scope>provided</scope>-->
-    <!--</dependency>-->
-    <!-- hbase -->
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-core</artifactId>
+      <version>2.6.0</version>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-client</artifactId>
@@ -84,7 +93,7 @@
       <version>3.0.4</version>
     </dependency>
 
-    <!--&lt;!&ndash; spark &ndash;&gt;-->
+    <!-- spark -->
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_2.10</artifactId>
@@ -124,6 +133,7 @@
       <artifactId>jedis</artifactId>
       <version>2.8.0</version>
     </dependency>
+
     <!--<dependency>-->
       <!--<groupId>RedisLabs</groupId>-->
       <!--<artifactId>spark-redis</artifactId>-->
@@ -141,6 +151,13 @@
       <version>4.4</version>
       <scope>test</scope>
     </dependency>
+
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
+      <version>4.2.5.RELEASE</version>
+    </dependency>
+
   </dependencies>
 
   <build>

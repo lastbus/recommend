@@ -11,6 +11,7 @@ import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.mllib.linalg.{SparseVector => SV, _}
 import org.apache.spark.{SparkConf, SparkContext}
+import com.redislabs.provider.redis._
 
 import scala.collection.mutable
 
@@ -24,10 +25,6 @@ import scala.collection.mutable
   * 如 a 商品的属性为 A、B、C，则 a 商品向量化以后为 va = [1,1,1,0,0]
   * b 商品的属性为 C、D、E，则 b 商品向量化以后为 vb = [0,0,1,1,1]
   * 所以商品向量化以后的含义是，如果某一项为1，则代表有这个属性，0则代表不存在这个属性。
-  *
-  * 如果加入商品价格属性的话，因为所有的商品都有价格这个属性，
-  * 而且不同的商品价格不同，商品的价格向量化以后也应该反映商品价格这个特点。
-  * 但是上述向量的含义很难描述商品价格这个特点，所以价格属性不应该和其他属性一起进行向量化。
   *
   * Created by MK33 on 2016/3/9.
   */
@@ -63,6 +60,9 @@ object Main extends Tool {
     val columnName = args(3)
     val delimiter = "\t"
     val sparkConf = new SparkConf().setAppName(this.getClass.getName)
+    sparkConf.set("redis.host", "10.201.128.216")
+    sparkConf.set("redis.timeout", "10000")
+
     if (!inputPath.startsWith("/")) sparkConf.setMaster("local[*]")
     val sc = new SparkContext(sparkConf)
 
@@ -130,18 +130,11 @@ object Main extends Tool {
     }.filter { case (id1, (id2, cosSim)) => cosSim > 0.0 } // 相似度低的过滤
       .map { case (id1, (id2, cosSim)) => (id1, Seq((id2, cosSim))) }
       .reduceByKey((s1, s2) => s1 ++ s2)
-      .map { case (id1, seq) => (id1, seq.sortWith((seq1, seq2) => seq1._2 > seq2._2)) }
-      .map { case (id, seqList) =>
-        //        val put = new Put(Bytes.toBytes(id))
-        val sb = new StringBuilder()
-        for (i <- seqList.indices if i < 20) {
-          //拼接成 “id#id#id ... #id” 的形式，保存在 HBase 中作为一个字段
-          if (i == 0) sb.append(seqList(i)._1) else sb.append(s"#${seqList(i)._1}")
-        }
-        (id, sb.toString())
-      }
+      .map { case (id1, seq) => ("rcmd_sim_" + id1, seq.sortWith((seq1, seq2) => seq1._2 > seq2._2).take(20).map(_._1).mkString("#"))}
 
+//    sc.toRedisKV(similarity)
 
+    similarity.collect{ case (a, b) => a.equals("0")}
     if (inputPath.startsWith("/")) {
       // save to hbase
       val hBaseConf = HBaseConfiguration.create()
@@ -163,7 +156,7 @@ object Main extends Tool {
       }
         .saveAsNewAPIHadoopDataset(job.getConfiguration)
     } else {
-      similarity.take(50).foreach(println)
+      similarity.collect{ case s => s._1.equals("203693")}.foreach(println)
     }
     sc.stop()
   }
