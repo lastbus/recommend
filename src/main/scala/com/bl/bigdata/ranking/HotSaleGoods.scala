@@ -50,6 +50,7 @@ object HotSaleGoods {
     val beforeMill = now.getTime - 24 * 60 * 60 * 1000 * n
     val before = new Date(beforeMill)
     val sdf  = new SimpleDateFormat("yyyy-MM-dd")
+    
     sdf.format(before)
   }
 
