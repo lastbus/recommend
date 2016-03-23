@@ -132,7 +132,7 @@ object Main extends Tool {
       .reduceByKey((s1, s2) => s1 ++ s2)
       .map { case (id1, seq) => ("rcmd_sim_" + id1, seq.sortWith((seq1, seq2) => seq1._2 > seq2._2).take(20).map(_._1).mkString("#"))}
 
-//    sc.toRedisKV(similarity)
+    sc.toRedisKV(similarity)
 
     similarity.collect{ case (a, b) => a.equals("0")}
     if (inputPath.startsWith("/")) {
@@ -156,7 +156,7 @@ object Main extends Tool {
       }
         .saveAsNewAPIHadoopDataset(job.getConfiguration)
     } else {
-      similarity.collect{ case s => s._1.equals("203693")}.foreach(println)
+      similarity.first()
     }
     sc.stop()
   }
