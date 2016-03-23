@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+    <property>
+        <name>hot.sale.input.path</name>
+        <value>D:\2016-03-21\user_order_raw_data</value>
+    </property>
+    <property>
+        <name>hot.sale.out</name>
+        <value>redis</value>
+    </property>
+    <property>
+        <name>redis.host</name>
+        <value>12.201.128.216</value>
+    </property>
+    <property>
+        <name>redis.port</name>
+        <value>6397</value>
+    </property>
+    <property>
+        <name>redis.timeout</name>
+        <value>10000</value>
+    </property>
+    <property>
+        <name>day.before.today</name>
+        <value>1</value>
+    </property>
+    <property>
+        <name>hot.sale.index</name>
+        <value>2</value>
+    </property>
+</Configuration>

@@ -1,5 +1,8 @@
 package com.bl.bigdata.ranking
 
+import java.text.SimpleDateFormat
+import java.util.Date
+
 import org.apache.spark.{SparkContext, SparkConf}
 import redis.clients.jedis.{JedisPoolConfig, JedisPool}
 
@@ -15,6 +18,8 @@ object HotSaleGoods {
     val sparkConf = new SparkConf()
       .setMaster("local[*]")
       .setAppName(this.getClass.getName)
+    val period = 2
+
 
     val sc = new SparkContext(sparkConf)
     val jedisPool = new JedisPool(new JedisPoolConfig, "10.201.128.216", 6379) with Serializable
@@ -26,18 +31,26 @@ object HotSaleGoods {
     }.map{ case (goodsID, goodsName, sale_num, categoryID, category) =>
       (goodsID, (goodsName, sale_num, categoryID, category))
     }.reduceByKey((s1, s2) => (s1._1, s1._2 + s2._2, s1._3, s1._4))
-        .map{ case (goodsID, (goodsName, sale_num, categoryID, category)) => {
+        .map{ case (goodsID, (goodsName, sale_num, categoryID, category)) =>
           (categoryID, Seq((goodsID, sale_num)))
-      }}.reduceByKey(_ ++ _).map{ case (category, seq) => (category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#"))}
+        }.reduceByKey(_ ++ _).map{ case (category, seq) => (category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#"))}
       .collect()
-      .foreach{ case (category, ranking) => {
+      .foreach{ case (category, ranking) =>
         val jedis = jedisPool.getResource
         jedis.set("rcmd_cate_hotsale_" + category, ranking)
         println("rcmd_cate_hotsale_" + category)
         jedis.close()
-      }}
+      }
 
 
+  }
+
+  def getDateBeforeNow(n: Int): String = {
+    val now = new Date
+    val beforeMill = now.getTime - 24 * 60 * 60 * 1000 * n
+    val before = new Date(beforeMill)
+    val sdf  = new SimpleDateFormat("yyyy-MM-dd")
+    sdf.format(before)
   }
 
 }
