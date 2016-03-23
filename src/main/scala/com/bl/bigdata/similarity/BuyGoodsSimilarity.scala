@@ -3,7 +3,10 @@ package com.bl.bigdata.similarity
 import org.apache.spark.{SparkContext, SparkConf}
 
 /**
-  * 计算用户购买的物品在一级类目下的关联度
+  * 计算用户购买的物品在一级类目下的关联度。
+  * 物体 A 和 B 的关联度：
+  * r(A,B) = N(A,B) / N(B)
+  * r(B,A) = N(A,B) / N(A)
   * Created by MK33 on 2016/3/16.
   */
 object BuyGoodsSimilarity {

@@ -6,6 +6,4 @@ package com.bl.bigdata.util
 trait Configurable {
 
   def loadResource(path: String)
-
-
 }

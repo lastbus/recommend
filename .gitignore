@@ -1,6 +1,3 @@
-*~
-*.#*
-*#*#
 *.swp
 *.ipr
 *.iml
@@ -78,4 +75,4 @@ sql/hive-thriftserver/test_warehouses
 # For R session data
 .RHistory
 .RData
-12/**/*
+12/

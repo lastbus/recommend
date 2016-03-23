@@ -1,6 +1,5 @@
-package com.bl.bigdata.userAnalyze
+package com.bl.bigdata.useranalyze
 
-import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkContext, SparkConf}
 
 /**
@@ -18,12 +17,8 @@ object UserActivity {
     val outputPath = args(1)
 
     val sparkConf = new SparkConf().setAppName(this.getClass.getName)
-    if(!inputPath.startsWith("/")) {
-      sparkConf.setMaster("local[*]")
-      // spark 只输出警告级别以上的信息
-      Logger.getLogger("org").setLevel(Level.WARN)
-      Logger.getLogger("akka").setLevel(Level.WARN)
-    }
+    if(!inputPath.startsWith("/")) sparkConf.setMaster("local[*]")
+
     val sc = new SparkContext(sparkConf)
 
     val rawRDD = sc.textFile(inputPath).map(line => {
