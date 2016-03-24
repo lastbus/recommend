@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.typesafe</groupId>
+    <artifactId>scalalogging-log4j_2.10</artifactId>
+    <packaging>jar</packaging>
+    <description>scalalogging-log4j</description>
+    <url>https://github.com/typesafehub/scalalogging</url>
+    <version>1.0.1</version>
+    <licenses>
+        <license>
+            <name>Apache 2.0 License</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <name>scalalogging-log4j</name>
+    <organization>
+        <name>com.typesafe</name>
+        <url>https://github.com/typesafehub/scalalogging</url>
+    </organization>
+    <scm>
+        <url>https://github.com/typesafehub/scalalogging</url>
+        <connection>scm:git:git://github.com/typesafehub/scalalogging.git</connection>
+    </scm>
+    <developers>
+        <developer>
+            <id>hseeberger</id>
+            <name>Heiko Seeberger</name>
+            <url>http://heikoseeberger.name</url>
+        </developer>
+    </developers>
+    <dependencies>
+        <dependency>
+            <groupId>org.scala-lang</groupId>
+            <artifactId>scala-reflect</artifactId>
+            <version>2.10.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.0-beta3</version>
+        </dependency>
+    </dependencies>
+</project>

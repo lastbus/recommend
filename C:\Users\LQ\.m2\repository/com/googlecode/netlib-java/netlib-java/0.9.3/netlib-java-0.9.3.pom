@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.googlecode.netlib-java</groupId>
+    <artifactId>netlib-java</artifactId>
+    <version>0.9.3</version>
+    <name>Netlib for Java</name>
+    <description>Netlib for Java that can use either native libraries or pure Java implementations.</description>
+    <url>http://code.google.com/p/netlib-java/</url>
+    <licenses>
+        <license>
+            <name>The BSD License</name>
+            <url>http://www.opensource.org/licenses/bsd-license.php</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <scm>
+        <url>http://code.google.com/p/netlib-java/source/browse/</url>
+        <connection>scm:svn:http://netlib-java.googlecode.com/svn/trunk/</connection>
+    </scm>
+    <developers>
+        <developer>
+            <name>Sam Halliday</name>
+        </developer>
+    </developers>
+    <dependencies>
+        <dependency>
+            <groupId>net.sourceforge.f2j</groupId>
+            <artifactId>arpack_combined_all</artifactId>
+            <version>0.1</version>
+        </dependency>
+    </dependencies>
+</project>

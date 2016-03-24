@@ -1,7 +1,7 @@
 package com.bl.bigdata.util
 
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig
-import redis.clients.jedis.JedisPool
+import redis.clients.jedis.{JedisPoolConfig, JedisPool}
 
 /**
   * Created by MK33 on 2016/3/8.
@@ -22,5 +22,9 @@ object RedisUtil extends Serializable {
 
   sys.addShutdownHook(hook.run)
 
+
+  def getJedisPool = {
+    new JedisPool(new JedisPoolConfig, "10.201.128.216") with Serializable
+  }
 }
 
