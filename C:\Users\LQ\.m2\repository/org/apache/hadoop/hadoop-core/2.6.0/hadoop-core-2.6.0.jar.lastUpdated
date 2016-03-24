@@ -1,8 +1,0 @@
-#NOTE: This is an Aether internal implementation file, its format can be changed without prior notice.
-#Wed Mar 23 19:40:31 PDT 2016
-http\://10.201.96.114\:9000/nexus/content/groups/public/.lastUpdated=1458787209850
-http\://scala-tools.org/repo-releases/.error=
-@default-central-https\://repo.maven.apache.org/maven2/.lastUpdated=1458787231606
-https\://repo.maven.apache.org/maven2/.error=Could not transfer artifact org.apache.hadoop\:hadoop-core\:jar\:2.6.0 from/to central (https\://repo.maven.apache.org/maven2)\: Connect to repo.maven.apache.org\:443 [repo.maven.apache.org/185.31.19.215] failed\: Connection refused
-http\://10.201.96.114\:9000/nexus/content/groups/public/.error=
-http\://scala-tools.org/repo-releases/.lastUpdated=1458787210583

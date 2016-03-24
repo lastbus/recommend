@@ -17,7 +17,7 @@ object GuessWhatYouLike {
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
     if (args.length != 1) {
-      println("spark-submit --master local[*] --class com.bailian.bigdata.GuessWhatYouLike recommend-1.0-SNAPSHOT.jar " +
+      println("spark-submit --master local[*] --class com.bailian.bigdata.similarity.GuessWhatYouLike recommend-1.0-SNAPSHOT.jar " +
         "user_product_score")
       sys.exit(1)
     }
