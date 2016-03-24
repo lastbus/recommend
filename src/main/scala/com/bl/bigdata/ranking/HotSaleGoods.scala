@@ -21,13 +21,17 @@ object HotSaleGoods {
 
     val hotSaleConf = new HotSaleConf()
     hotSaleConf.parseConfFile("hot-sale.xml")
-    val deadTime = getDateBeforeNow(hotSaleConf.get("day.before.today").toInt)
-    val sparkConf = new SparkConf()
-      .setMaster("local[*]")
-      .setAppName(this.getClass.getName)
     val output = hotSaleConf.get("hot.sale.output")
     val redis = output.contains("redis")
     val local = output.contains("local")
+
+    val deadTimeOne = getDateBeforeNow(hotSaleConf.get("day.before.today.one").toInt)
+    val deadTimeOneIndex = hotSaleConf.get("hot.sale.index.one").toDouble
+    val deadTimeTwo = getDateBeforeNow(hotSaleConf.get("day.before.today.two").toInt)
+
+    val sparkConf = new SparkConf()
+      .setMaster("local[*]")
+      .setAppName(this.getClass.getName)
     if (redis) {
       for ((key, value) <- hotSaleConf.getAll.filter(_._1.startsWith("redis."))){
         sparkConf.set(key, value)
@@ -39,9 +43,9 @@ object HotSaleGoods {
       val w = line.split("\t")
       (w(3), w(4), w(6).toDouble, w(7), w(9), w(10))
     })
-      .filter(item => filterDate(item, deadTime))
+      .filter(item => filterDate(item, deadTimeTwo))
       .map { case (goodsID, goodsName, sale_num, sale_time, categoryID, category) =>
-        (goodsID, (goodsName, sale_num, categoryID, category))
+        (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID, category))
       }.reduceByKey((s1, s2) => (s1._1, s1._2 + s2._2, s1._3, s1._4))
       .map { case (goodsID, (goodsName, sale_num, categoryID, category)) =>
         (categoryID, Seq((goodsID, sale_num)))
@@ -49,18 +53,23 @@ object HotSaleGoods {
       .reduceByKey(_ ++ _)
       .map { case (category, seq) => (category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) }
 
+
+
     if(redis) {
       logger.info("start to write 热销 to redis.")
       sc.toRedisKV(result)
       logger.info("write finished.")
     }
     if( local) {
+      logger.info("begin to write to local")
+      var i = 0
       result.collect().foreach { case (category, ranking) =>
           val jedis = jedisPool.getResource
           jedis.set("rcmd_cate_hotsale_" + category, ranking)
-          println("rcmd_cate_hotsale_" + category)
           jedis.close()
+          i += 1
         }
+      logger.info(s"$i key-values are written to local finished.")
     }
 
 
@@ -73,7 +82,7 @@ object HotSaleGoods {
    */
   def getDateBeforeNow(n: Int): String = {
     val now = new Date
-    val beforeMill = now.getTime - 24 * 60 * 60 * 1000 * n
+    val beforeMill = now.getTime - 24L * 60 * 60 * 1000 * n
     val before = new Date(beforeMill)
     val sdf = new SimpleDateFormat("yyyy-MM-dd")
     sdf.format(before)

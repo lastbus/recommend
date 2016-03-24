@@ -6,7 +6,7 @@
     </property>
     <property>
         <name>hot.sale.output</name>
-        <value>redis</value>
+        <value>:local</value>
     </property>
     <property>
         <name>redis.host</name>
@@ -21,11 +21,19 @@
         <value>10000</value>
     </property>
     <property>
-        <name>day.before.today</name>
-        <value>7</value>
+        <name>day.before.today.one</name>
+        <value>10</value>
     </property>
     <property>
-        <name>hot.sale.index</name>
-        <value>2</value>
+        <name>hot.sale.index.one</name>
+        <value>4</value>
+    </property>
+    <property>
+        <name>day.before.today.two</name>
+        <value>200</value>
+    </property>
+    <property>
+        <name>hot.sale.index.two</name>
+        <value>1</value>
     </property>
 </Configuration>
