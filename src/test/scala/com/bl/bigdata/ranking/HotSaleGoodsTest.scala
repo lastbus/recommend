@@ -15,4 +15,11 @@ class HotSaleGoodsTest {
     assert(HotSaleGoods.getDateBeforeNow(7) == "2016-03-16")
   }
 
+  @Test
+  def testFilterDate = {
+    assert(HotSaleGoods.filterDate(("", "", 0, "2016-03-03 09:39:11.0", "", ""), "2016-03-01") == true)
+    assert(HotSaleGoods.filterDate(("", "", 0, "2016-03-01 00:00:00.0", "", ""), "2016-03-01") == true)
+    assert(HotSaleGoods.filterDate(("", "", 0, "2016-03-01 09:39:11.0", "", ""), "2016-03-02") == false)
+  }
+
 }

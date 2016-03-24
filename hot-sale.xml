@@ -5,16 +5,16 @@
         <value>D:\2016-03-21\user_order_raw_data</value>
     </property>
     <property>
-        <name>hot.sale.out</name>
+        <name>hot.sale.output</name>
         <value>redis</value>
     </property>
     <property>
         <name>redis.host</name>
-        <value>12.201.128.216</value>
+        <value>10.201.128.216</value>
     </property>
     <property>
         <name>redis.port</name>
-        <value>6397</value>
+        <value>6379</value>
     </property>
     <property>
         <name>redis.timeout</name>
@@ -22,7 +22,7 @@
     </property>
     <property>
         <name>day.before.today</name>
-        <value>1</value>
+        <value>7</value>
     </property>
     <property>
         <name>hot.sale.index</name>

@@ -1,6 +1,5 @@
 package com.bl.bigdata
 
-import java.util.Date
 
 import hello.{MessagePrinter, MessageService}
 import org.springframework.context.annotation.{ComponentScan, Bean, AnnotationConfigApplicationContext, Configuration}

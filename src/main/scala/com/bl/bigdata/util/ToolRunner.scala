@@ -5,7 +5,7 @@ package com.bl.bigdata.util
   */
 object ToolRunner {
 
-  def run(config: Configurable, tool: Tool, args: Array[String]): Unit ={
+  def run(config: ConfigurableBL, tool: Tool, args: Array[String]): Unit ={
     val startTime = System.currentTimeMillis()
 
     try {
