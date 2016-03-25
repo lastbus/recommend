@@ -1,5 +1,6 @@
 package com.bl.bigdata.similarity
 
+import com.bl.bigdata.util.{ToolRunner, Tool}
 import org.apache.spark.{SparkConf, SparkContext}
 import com.redislabs.provider.redis._
 
@@ -11,17 +12,15 @@ import com.redislabs.provider.redis._
   * r(B,A) = N(A,B) / N(A)
   * Created by MK33 on 2016/3/14.
   */
-object GoodsSimilarity {
+class GoodsSimilarity extends Tool {
 
-  /**
-    * 输入的参数：
-    *  1 输入文件 路径: 本地或者 hdfs
-    *  2 结果保存的路径
-    *
-    * @param args  程序参数
-    */
-  def main(args: Array[String]): Unit = {
+  def isEmpty(s: String): Boolean = {
+    if(s.trim.length == 0) true
+    else if(s.equalsIgnoreCase("NULL")) true
+    else false
+  }
 
+  override def run(args: Array[String]): Unit = {
     if(args.length < 2) {
       println("There are at least 2 parameters: <input path> and <save path>.")
       sys.exit(-1)
@@ -40,23 +39,23 @@ object GoodsSimilarity {
     val rawRdd = sc.textFile(inputPath)
       // 提取需要的字段
       .map( line => {
-        //cookie ID, member id, session id, goods id, goods name, quality,
-        // event data, behavior code, channel, category sid, dt
-        val w = line.split("\t")
-        // cookie,商品类别,日期,用户行为,商品id
-        (w(0), w(9), w(6).substring(0, w(6).indexOf(" ")), w(7), w(3))
-      })
+      //cookie ID, member id, session id, goods id, goods name, quality,
+      // event data, behavior code, channel, category sid, dt
+      val w = line.split("\t")
+      // cookie,商品类别,日期,用户行为,商品id
+      (w(0), w(9), w(6).substring(0, w(6).indexOf(" ")), w(7), w(3))
+    })
       // 提取 user 浏览商品的行为
       .filter{ case (cookie, category, date, behaviorId, goodsId) => behaviorId == "1000"}
       .map{ case (cookie, category, date, behaviorId, goodsId) =>
         ((cookie, category, date), goodsId)
       }.distinct.filter(v => !isEmpty(v._1._2))
 
-//    rawRdd.filter(_._2 == "159431").collect().foreach(println)
+    //    rawRdd.filter(_._2 == "159431").collect().foreach(println)
 
-      // 将用户看过的商品两两结合在一起
+    // 将用户看过的商品两两结合在一起
     val tuple = rawRdd.join(rawRdd).filter{ case (k, (v1, v2)) => v1 != v2}
-        .map{ case (k, (goodId1, goodId2)) => (goodId1, goodId2)}
+      .map{ case (k, (goodId1, goodId2)) => (goodId1, goodId2)}
 
 
     // 计算浏览商品 (A,B) 的次数
@@ -75,15 +74,13 @@ object GoodsSimilarity {
     sc.toRedisKV(good1Good2Similarity)
 
     sc.stop()
-//    if(!savePath.startsWith("/")) good1Good2Similarity.take(50).foreach(println)
-//    else good1Good2Similarity.saveAsTextFile(savePath)
 
   }
+}
 
-  def isEmpty(s: String): Boolean = {
-    if(s.trim.length == 0) true
-    else if(s.equalsIgnoreCase("NULL")) true
-    else false
+object GoodsSimilarity {
+
+  def main(args: Array[String]) {
+    (new GoodsSimilarity with ToolRunner).run(args)
   }
-
 }

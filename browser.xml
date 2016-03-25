@@ -6,7 +6,7 @@
     </property>
     <property>
         <name>browser.output</name>
-        <value>local:redis</value>
+        <value>local:re0dis</value>
     </property>
     <property>
         <name>browser.app.name</name>

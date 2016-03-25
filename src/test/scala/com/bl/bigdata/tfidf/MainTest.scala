@@ -14,8 +14,9 @@ class MainTest {
 
   @Test
   def testCalculatorTF() = {
-    val feature = Main.featuresNum
-    val tf = Main.calculatorTF(attr, "500", priceList)
+    val m = new GoodsSimilarityInCate
+    val feature = m.featuresNum
+    val tf = m.calculatorTF(attr, "500", priceList)
     tf match {
       case SparseVector(size, indices, values) =>
         assert(size == feature + 1)
@@ -28,12 +29,12 @@ class MainTest {
         }
       case other => assert(false)
     }
-    assert(Main.featuresNum + 1 == tf.size)
+    assert(m.featuresNum + 1 == tf.size)
     assert(5 == tf(feature))
-    val tf2 = Main.calculatorTF(attr, "20", priceList)
+    val tf2 = m.calculatorTF(attr, "20", priceList)
     assert(1 == tf2(feature))
 
-    val tf3 = Main.calculatorTF(attr, "null", priceList)
+    val tf3 = m.calculatorTF(attr, "null", priceList)
     assert(3.0 == tf3(feature))
   }
 

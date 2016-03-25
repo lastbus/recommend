@@ -1,5 +1,6 @@
 package com.bl.bigdata.similarity
 
+import com.bl.bigdata.util.{ToolRunner, Tool}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rating}
 import org.apache.spark.rdd._
@@ -11,8 +12,30 @@ import com.bl.bigdata.util.RedisUtil._
 /**
  * Created by blemall on 3/23/16.
  */
-object GuessWhatYouLike {
-  def main(args: Array[String]) {
+class GuessWhatYouLike extends Tool {
+
+  /** Compute RMSE (Root Mean Squared Error). */
+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
+    val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
+    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
+      .join(data.map(x => ((x.user, x.product), x.rating)))
+      .values
+    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
+  }
+
+  def saveToRedis(sparkConf: SparkConf ,jedisPool: JedisPool, values: Map[Integer, Array[Rating]]): Unit = {
+    sparkConf.set("redis.host", "10.201.128.216")
+    sparkConf.set("redis.port", "6379")
+    sparkConf.set("redis.timeout", "10000")
+    val jedis = jedisPool.getResource
+    import com.bl.bigdata.util.implicts.map2HashMap
+    values.map{v =>
+      val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
+      jedis.hmset(v._1.toString, map)
+    }
+  }
+
+  override def run(args: Array[String]): Unit = {
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
@@ -112,25 +135,11 @@ object GuessWhatYouLike {
     // clean up
     sc.stop()
   }
+}
 
-  /** Compute RMSE (Root Mean Squared Error). */
-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
-    val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
-    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
-      .join(data.map(x => ((x.user, x.product), x.rating)))
-      .values
-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
-  }
+object GuessWhatYouLike {
 
-  def saveToRedis(sparkConf: SparkConf ,jedisPool: JedisPool, values: Map[Integer, Array[Rating]]): Unit = {
-    sparkConf.set("redis.host", "10.201.128.216")
-    sparkConf.set("redis.port", "6379")
-    sparkConf.set("redis.timeout", "10000")
-    val jedis = jedisPool.getResource
-    import com.bl.bigdata.util.implicts.map2HashMap
-    values.map{v =>
-      val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
-      jedis.hmset(v._1.toString, map)
-    }
+  def main(args: Array[String]) {
+    (new GuessWhatYouLike with ToolRunner).run(args)
   }
 }

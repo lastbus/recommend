@@ -11,16 +11,10 @@ import scala.xml.XML
 /**
  * Created by MK33 on 2016/3/23.
  */
-class ConfigurationBL extends ConfigurableBL {
+object ConfigurationBL extends ConfigurableBL {
 
   private val logger = LogManager.getLogger(this.getClass)
-
   private val setting = new ConcurrentHashMap[String, String]()
-
-  def this(file: String*) {
-    this()
-    for (f <- file) parseConfFile(f)
-  }
 
   /** 解析配置文件 */
   def parseConfFile(file: String): Unit = {

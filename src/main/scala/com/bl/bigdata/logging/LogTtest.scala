@@ -1,5 +1,6 @@
 package com.bl.bigdata.logging
 
+import org.apache.hadoop.util.ToolRunner
 import org.apache.logging.log4j.LogManager
 
 /**
@@ -15,5 +16,6 @@ object LogTtest {
     logger.warn("warn")
     logger.error("error")
     logger.fatal("fatal")
+
   }
 }

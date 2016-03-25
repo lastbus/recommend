@@ -11,10 +11,9 @@ class HotSaleConfTest {
 
   @Test
   def testAddResource = {
-    val hotSaleConf = new ConfigurationBL()
-    hotSaleConf.parseConfFile("hot-sale.xml")
-    assert(hotSaleConf.get("hot.sale.input.path") == "D:\\2016-03-21\\user_order_raw_data")
-    assert(hotSaleConf.get("hot.sale.output") == "redis")
-    assert(hotSaleConf.get("day.before.today") == "1")
+    ConfigurationBL.parseConfFile("hot-sale.xml")
+    assert(ConfigurationBL.get("hot.sale.input.path") == "D:\\2016-03-21\\user_order_raw_data")
+    assert(ConfigurationBL.get("hot.sale.output") == "redis")
+    assert(ConfigurationBL.get("day.before.today") == "1")
   }
 }

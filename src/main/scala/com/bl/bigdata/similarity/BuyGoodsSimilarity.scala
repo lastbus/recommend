@@ -1,6 +1,6 @@
 package com.bl.bigdata.similarity
 
-import com.bl.bigdata.util.ConfigurationBL
+import com.bl.bigdata.util.{ToolRunner, Tool, ConfigurationBL}
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkContext, SparkConf}
 import com.redislabs.provider.redis._
@@ -11,20 +11,17 @@ import com.redislabs.provider.redis._
   * r(B,A) = N(A,B) / N(A)
   * Created by MK33 on 2016/3/16.
   */
-object BuyGoodsSimilarity {
+class BuyGoodsSimilarity extends Tool{
 
   private val logger = LogManager.getLogger(this.getClass.getName)
 
-  /**
-    * @param args 用户行为记录文件路径，商品类目文件路径，结果保存的路径
-    */
-  def main(args: Array[String]): Unit = {
+  override def run(args: Array[String]): Unit = {
     logger.info("starting to calculator buy goods similarity.")
 
-    val similarityConf = new ConfigurationBL("buy-similarity.xml")
-    val inputPath = similarityConf.get("buy.similarity.input.path")
-    val inputPath2 = similarityConf.get("buy.similarity.input.category")
-    val outPath = similarityConf.get("buy.similarity.output")
+    val similarityConf = ConfigurationBL.parseConfFile("buy-similarity.xml")
+    val inputPath = ConfigurationBL.get("buy.similarity.input.path")
+    val inputPath2 = ConfigurationBL.get("buy.similarity.input.category")
+    val outPath = ConfigurationBL.get("buy.similarity.output")
     val redis = outPath.contains("redis")
     val local = outPath.contains("local")
 
@@ -32,7 +29,7 @@ object BuyGoodsSimilarity {
     // 如果在本地测试，将 master 设置为 local 模式
     if (local) sparkConf.setMaster("local[*]")
     if (redis) {
-      for ((key, value) <- similarityConf.getAll if key.startsWith("redis."))
+      for ((key, value) <- ConfigurationBL.getAll if key.startsWith("redis."))
         sparkConf.set(key, value)
     }
     val sc = new SparkContext(sparkConf)
@@ -46,12 +43,12 @@ object BuyGoodsSimilarity {
       // 商品类别,cookie,日期,用户行为编码,商品id
       (w(9), (w(0), w(6).substring(0, w(6).indexOf(" ")), w(7), w(3)))
     })
-    // 提取购买的物品
+      // 提取购买的物品
       .filter{ case (category, (cookie, date, behaviorID, goodsID)) => behaviorID.equals("4000")}
       .map{case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID))}.distinct
 
     val categoriesRDD = sc.textFile(inputPath2)
-    // 提取字段
+      // 提取字段
       .map( line => {
       val w = line.split("\t")
       // 商品的末级目录，一级目录
@@ -75,7 +72,7 @@ object BuyGoodsSimilarity {
       .reduceByKey(_ ++ _).mapValues(seq => seq.sortWith(_._2 > _._2).map(_._1).mkString("#"))
 
     if (redis) {
-      logger.info(s"output result to redis, host: ${similarityConf.get("redis.host")}.")
+      logger.info(s"output result to redis, host: ${ConfigurationBL.get("redis.host")}.")
       sc.toRedisKV(sorting.map(s => ("rcmd_bab_goods_" + s._1, s._2)))
       logger.info("finished to output to redis.")
     }
@@ -87,6 +84,12 @@ object BuyGoodsSimilarity {
     }
 
     sc.stop()
-  }
 
+  }
+}
+
+object BuyGoodsSimilarity {
+  def main(args: Array[String]) {
+    (new BuyGoodsSimilarity with ToolRunner).run(args)
+  }
 }

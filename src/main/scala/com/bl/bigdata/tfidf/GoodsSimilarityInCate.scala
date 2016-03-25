@@ -28,25 +28,9 @@ import scala.collection.mutable
   *
   * Created by MK33 on 2016/3/9.
   */
-object Main extends Tool {
+class GoodsSimilarityInCate extends Tool {
 
   val featuresNum = 1 << 16
-
-  def main(args: Array[String]): Unit = {
-    ToolRunner.run(TFIDFConfiguration, Main, args)
-  }
-
-
-  def indexOf(term: Any): Int = nonNegativeMod(term.##, featuresNum)
-
-  /* Calculates 'x' modulo 'mod', takes to consideration sign of x,
-  * i.e. if 'x' is negative, than 'x' % 'mod' is negative too
-  * so function return (x % mod) + mod in that case.
-  */
-  def nonNegativeMod(x: Int, mod: Int): Int = {
-    val rawMod = x % mod
-    rawMod + (if (rawMod < 0) mod else 0)
-  }
 
   override def run(args: Array[String]): Unit = {
 
@@ -188,4 +172,17 @@ object Main extends Tool {
     Vectors.sparse(featuresNum + 1, termFrequency.toSeq)
   }
 
+  def indexOf(term: Any): Int = nonNegativeMod(term.##, featuresNum)
+
+  def nonNegativeMod(x: Int, mod: Int): Int = {
+    val rawMod = x % mod
+    rawMod + (if (rawMod < 0) mod else 0)
+  }
+
+}
+
+object GoodsSimilarityInCate {
+  def main(args: Array[String]) {
+    (new GoodsSimilarityInCate with ToolRunner).run(args)
+  }
 }

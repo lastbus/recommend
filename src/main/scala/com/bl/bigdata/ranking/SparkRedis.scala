@@ -1,14 +1,17 @@
 package com.bl.bigdata.ranking
 
+import com.bl.bigdata.util.{ToolRunner, Tool}
+import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkConf, SparkContext}
 import com.redislabs.provider.redis._
 
 /**
   * Created by MK33 on 2016/3/22.
   */
-object SparkRedis {
+class SparkRedis extends Tool {
+  private val logger = LogManager.getLogger(this.getClass.getName)
 
-  def main(args: Array[String]): Unit ={
+  override def run(args: Array[String]): Unit = {
     val sparkConf = new SparkConf().setMaster("local")
       .setAppName("myApp")
       // initial redis host - can be any node in cluster mode
@@ -16,7 +19,7 @@ object SparkRedis {
       // initial redis port
       .set("redis.port", "6379")
       // optional redis AUTH password
-//      .set("redis.auth", "")
+      //      .set("redis.auth", "")
       .set("redis.timeout", "10000")
 
     val sc = new SparkContext(sparkConf)
@@ -34,13 +37,11 @@ object SparkRedis {
     }}.flatMap(m => m.seq)
 
     sc.toRedisHASH(r, "rcmd_orig")
-
-//    val t = sc.parallelize(List(("age", "27"), ("name", "make")))
-//    sc.toRedisKV(t)
-//    val r = sc.fromRedisKV("rcmd_cate_hotsale_*").count()
-//    println(r)
-
-
   }
+}
 
+object SparkRedis {
+  def main(args: Array[String]) {
+    (new SparkRedis with ToolRunner).run(args)
+  }
 }

@@ -1,5 +1,6 @@
 package com.bl.bigdata.similarity
 
+import com.bl.bigdata.util.Tool
 import org.apache.spark.{SparkContext, SparkConf}
 import com.redislabs.provider.redis._
 
@@ -9,10 +10,14 @@ import com.redislabs.provider.redis._
   * r(seeGoods, buyGoods) = N(seeGoods, buyGoods) / N(buyGoods)
   * Created by MK33 on 2016/3/15.
   */
-object SeeBuyGoodsSimilarity {
+class SeeBuyGoodsSimilarity extends Tool {
 
   def main(args: Array[String]): Unit = {
 
+
+  }
+
+  override def run(args: Array[String]): Unit = {
     if(args.length < 2){
       println("Pleas input <input path> and <save path>.")
       sys.exit(-1)
@@ -62,9 +67,8 @@ object SeeBuyGoodsSimilarity {
     // 如果是本地运行，则直接输出，否则保存在 hadoop 中。
     if (!inputPath.startsWith("/")) browserAndBuy.take(50).foreach(println)
     else sc.toRedisKV(browserAndBuy)
-//    browserAndBuy.first()
+    //    browserAndBuy.first()
 
     sc.stop()
   }
-
 }

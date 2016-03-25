@@ -1,42 +1,39 @@
 package com.bl.bigdata.ranking
 
-import java.util
-import org.apache.spark.{SparkContext, SparkConf}
-import redis.clients.jedis.{Jedis, Protocol, JedisPoolConfig, JedisPool}
-import com.redislabs.provider.redis._
 import com.bl.bigdata.util.RedisUtil._
+import com.bl.bigdata.util.{ConfigurationBL, Tool, ToolRunner}
+import com.redislabs.provider.redis._
+import org.apache.logging.log4j.LogManager
+import org.apache.spark.{SparkConf, SparkContext}
+import redis.clients.jedis.JedisPool
 
 /**
+  * 计算商品的属性，保存成redis中hash值。
   * Created by MK33 on 2016/3/21.
   */
-object ToRedis {
-
-  def main(args: Array[String]): Unit = {
-    val sparkConf = new SparkConf().setMaster("local[*]").setAppName(this.getClass.getName)
-    sparkConf.set("redis.host", "10.201.128.216")
-    sparkConf.set("redis.port", "6379")
-    sparkConf.set("redis.timeout", "10000")
-    val sc = new SparkContext(sparkConf)
-    val jedisPool = getJedisPool
-    toRedis2(sc, jedisPool)
-    //    test(jedisPool)
-        toRedis1(sc, jedisPool)
-//        category(sc, jedisPool)
-    jedisPool.destroy()
-    sc.stop()
-  }
+class GoodsForSale extends Tool {
+  private val logger = LogManager.getLogger(this.getClass.getName)
 
   def toRedis2(sc: SparkContext, jedisPool: JedisPool): Unit = {
-    val r = sc.textFile("D:\\2016-03-21\\goods_avaialbe_for_sale")
+
+    ConfigurationBL.parseConfFile("recmd-conf.xml")
+    val inputPath = ConfigurationBL.get("")
+    val outputPath = ConfigurationBL.get("")
+    val delimiter = ConfigurationBL.get("", "\t")
+    val local = outputPath.contains("local")
+    val redis = outputPath.contains("redis")
+
+    val r = sc.textFile(inputPath)
       .map(line => {
-        val w = line.split("\t")
-        (w(0), w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9))
+        val w = line.split(delimiter)
+        (w(0), w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11))
       }).distinct.collect().foreach { case (sid, mdm_goods_sid, goods_sales_name, goods_type, pro_sid, brand_sid, cn_name,
-    category_id, category_name, sale_price) => {
+    category_id, category_name, sale_price, pic_id, url) => {
       val jedis = jedisPool.getResource
       val map = Map("sid" -> sid, "mdm_goods_sid" -> mdm_goods_sid, "goods_sales_name" -> goods_sales_name,
         "goods_type" -> goods_type, "pro_sid" -> pro_sid, "brand_sid" -> brand_sid, "cn_name" -> cn_name,
-        "category_id" -> category_id, "category_name" -> category_name, "sale_price" -> sale_price)
+        "category_id" -> category_id, "category_name" -> category_name, "sale_price" -> sale_price,
+        "pic_sid" -> pic_id, "url" -> url)
 
 //      if (!jedis.exists("rcmd_orig_" + sid)) {
 //        println("rcmd_orig_" + sid)
@@ -100,5 +97,28 @@ object ToRedis {
           |count2: $count2
        """.
         stripMargin)
+  }
+
+  override def run(args: Array[String]): Unit = {
+
+    val sparkConf = new SparkConf().setMaster("local[*]").setAppName(this.getClass.getName)
+    sparkConf.set("redis.host", "10.201.128.216")
+    sparkConf.set("redis.port", "6379")
+    sparkConf.set("redis.timeout", "10000")
+    val sc = new SparkContext(sparkConf)
+    val jedisPool = getJedisPool
+    toRedis2(sc, jedisPool)
+    //    test(jedisPool)
+    toRedis1(sc, jedisPool)
+    //        category(sc, jedisPool)
+    jedisPool.destroy()
+    sc.stop()
+  }
+}
+
+object GoodsForSale {
+
+  def main(args: Array[String]) {
+    (new GoodsForSale with ToolRunner).run(args)
   }
 }
