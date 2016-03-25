@@ -4,7 +4,7 @@ import java.util
 import org.apache.spark.{SparkContext, SparkConf}
 import redis.clients.jedis.{Jedis, Protocol, JedisPoolConfig, JedisPool}
 import com.redislabs.provider.redis._
-
+import com.bl.bigdata.util.RedisUtil._
 
 /**
   * Created by MK33 on 2016/3/21.
@@ -40,6 +40,7 @@ object ToRedis {
 
 //      if (!jedis.exists("rcmd_orig_" + sid)) {
 //        println("rcmd_orig_" + sid)
+        import com.bl.bigdata.util.implicts.map2HashMap
         jedis.hmset("rcmd_orig_" + sid, map)
 //      }
       jedis.close()
@@ -100,19 +101,4 @@ object ToRedis {
        """.
         stripMargin)
   }
-
-
-
-  def getJedisPool = {
-//    10.201.128.216
-    new JedisPool(new JedisPoolConfig, "10.201.128.216") with Serializable
-  }
-
-
-  implicit def map2HashMap(map: Map[String, String]): util.HashMap[String, String] = {
-    val m = new util.HashMap[String, String]
-    for ((k, v) <- map) m.put(k, v)
-    m
-  }
-
 }
