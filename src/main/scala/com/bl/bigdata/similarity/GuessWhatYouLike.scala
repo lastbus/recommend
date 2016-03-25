@@ -94,7 +94,7 @@ object GuessWhatYouLike {
     sparkConf.set("redis.port", "6379")
     sparkConf.set("redis.timeout", "10000")
     val jedis = jedisPool.getResource
-    import com.bl.bigdata.util.implicts.map2HashMap
+    import com.bl.bigdata.util.Implicts.map2HashMap
     values.map{v =>
       val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
       if(map.nonEmpty) {

@@ -40,7 +40,7 @@ object ToRedis {
 
 //      if (!jedis.exists("rcmd_orig_" + sid)) {
 //        println("rcmd_orig_" + sid)
-        import com.bl.bigdata.util.implicts.map2HashMap
+        import com.bl.bigdata.util.Implicts.map2HashMap
         jedis.hmset("rcmd_orig_" + sid, map)
 //      }
       jedis.close()
