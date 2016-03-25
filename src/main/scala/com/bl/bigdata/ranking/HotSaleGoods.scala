@@ -3,6 +3,7 @@ package com.bl.bigdata.ranking
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.util.ConfigurationBL
 import com.redislabs.provider.redis._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkConf, SparkContext}
@@ -19,7 +20,7 @@ object HotSaleGoods {
 
   def main(args: Array[String]): Unit = {
 
-    val hotSaleConf = new HotSaleConf()
+    val hotSaleConf = new ConfigurationBL()
     hotSaleConf.parseConfFile("hot-sale.xml")
     val output = hotSaleConf.get("hot.sale.output")
     val redis = output.contains("redis")
@@ -77,6 +78,7 @@ object HotSaleGoods {
 
   /**
    * 计算今天前 n 天的日期
+ *
    * @param n 前 n 天
    * @return n 天前的日期
    */

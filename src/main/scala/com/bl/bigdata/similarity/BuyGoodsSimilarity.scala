@@ -1,7 +1,9 @@
 package com.bl.bigdata.similarity
 
+import com.bl.bigdata.util.ConfigurationBL
+import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkContext, SparkConf}
-
+import com.redislabs.provider.redis._
 /**
   * 计算用户购买的物品在一级类目下的关联度。
   * 物体 A 和 B 的关联度：
@@ -11,23 +13,28 @@ import org.apache.spark.{SparkContext, SparkConf}
   */
 object BuyGoodsSimilarity {
 
+  private val logger = LogManager.getLogger(this.getClass.getName)
 
   /**
     * @param args 用户行为记录文件路径，商品类目文件路径，结果保存的路径
     */
-  def main(args: Array[String]): Unit ={
+  def main(args: Array[String]): Unit = {
+    logger.info("starting to calculator buy goods similarity.")
 
-    if(args.length < 3){
-      println("Pleas input <input path>, <input path> and <save path>.")
-      sys.exit(-1)
-    }
+    val similarityConf = new ConfigurationBL("buy-similarity.xml")
+    val inputPath = similarityConf.get("buy.similarity.input.path")
+    val inputPath2 = similarityConf.get("buy.similarity.input.category")
+    val outPath = similarityConf.get("buy.similarity.output")
+    val redis = outPath.contains("redis")
+    val local = outPath.contains("local")
 
-    val inputPath = args(0)
-    val inputPath2 = args(1)
-    val outPath = args(2)
     val sparkConf = new SparkConf().setAppName(this.getClass.getName)
     // 如果在本地测试，将 master 设置为 local 模式
-    if (!inputPath.startsWith("/")) sparkConf.setMaster("local[*]")
+    if (local) sparkConf.setMaster("local[*]")
+    if (redis) {
+      for ((key, value) <- similarityConf.getAll if key.startsWith("redis."))
+        sparkConf.set(key, value)
+    }
     val sc = new SparkContext(sparkConf)
 
     val buyGoodsRDD = sc.textFile(inputPath)
@@ -64,9 +71,22 @@ object BuyGoodsSimilarity {
       .map{ case ((goodsID1, goodsID2), count) => (goodsID2, (goodsID1, count))}
       .join(buyCount)
       .map{ case (goodsID2, ((goodsID1, count), goodsID2Count)) => (goodsID1, goodsID2, count.toDouble / goodsID2Count)}
+    val sorting = result.map{ case (goodsID1, goodsID2, similarity) => (goodsID1, Seq((goodsID2, similarity)))}
+      .reduceByKey(_ ++ _).mapValues(seq => seq.sortWith(_._2 > _._2).map(_._1).mkString("#"))
 
-    if (!outPath.startsWith("/")) result.take(50).foreach(println)
-    else result.saveAsTextFile(outPath)
+    if (redis) {
+      logger.info(s"output result to redis, host: ${similarityConf.get("redis.host")}.")
+      sc.toRedisKV(sorting.map(s => ("rcmd_bab_goods_" + s._1, s._2)))
+      logger.info("finished to output to redis.")
+    }
+    if (local) {
+      logger.info("begin to output result to local redis.")
+      //TODO 导入本地 redis
+      result.take(50).foreach(println)
+      logger.info("finished to output result to local redis.")
+    }
+
+    sc.stop()
   }
 
 }
