@@ -68,5 +68,4 @@ class ConfigurationBL extends ConfigurableBL {
     logger.info(s"parse finished, loaded ${size} properties.")
     keyValues
   }
-
 }

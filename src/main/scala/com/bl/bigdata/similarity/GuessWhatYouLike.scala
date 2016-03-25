@@ -1,7 +1,7 @@
 package com.bl.bigdata.similarity
 
-import java.util.NoSuchElementException
-
+import java.text.SimpleDateFormat
+import java.util.{Date, NoSuchElementException}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rating}
 import org.apache.spark.rdd._
@@ -13,70 +13,72 @@ import com.bl.bigdata.util.RedisUtil._
  * Created by blemall on 3/23/16.
  */
 object GuessWhatYouLike {
+  val attenuationRatio = 0.95
+  val effectDay = 5
   def main(args: Array[String]) {
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
     if (args.length != 1) {
       println("spark-submit --master local[*] --class com.bailian.bigdata.similarity.GuessWhatYouLike recommend-1.0-SNAPSHOT.jar " +
-        "user_product_score")
+        "user_behavior_raw_data")
       sys.exit(1)
     }
 
     // set up environment
     val conf = new SparkConf()
       .setAppName("GuessWhatYouLike")
-      .set("spark.executor.memory", "2g")
+      .set("spark.executor.memory", "5g")
       .setMaster("local[*]")
     val sc = new SparkContext(conf)
-
     val ratingsFilePath = args(0).trim
     val ratingsCache =sc.textFile(ratingsFilePath).map { line =>
       val fields = line.split("\t")
-      (fields(0), fields(1).toInt, fields(2).toInt, fields(3).toDouble, fields(4).toLong)
+      //(cookieId, goodsId, goodsName, behaviorType, dt)
+      (fields(0), fields(3).toInt, fields(4), fields(7).toInt, fields(10))
     }.cache()
-    val ratings = ratingsCache.map{x => (x._5 % 10, Rating(x._2, x._3, x._4))}
-    val userIdMap = ratingsCache.map(x => (x._2, x._1)).collect().toMap
-    val numRatings = ratings.count()
-    val users = ratings.map(_._2.user).distinct()
-    val numUsers = users.count()
-    val numProducts = ratings.map(_._2.product).distinct().count()
 
-    println("Got " + numRatings + " ratings from " + numUsers + " users on " + numProducts + " products.")
-    val numPartitions = 4
-    val training = ratings.filter(x => x._1 < 6)
-      .values
-      .repartition(numPartitions)
-      .cache()
-    val validation = ratings.filter(x => x._1 >= 6 && x._1 < 8)
-      .values
-      .repartition(numPartitions)
-      .cache()
-    val test = ratings.filter(x => x._1 >= 8).values.cache()
+    val ratings = ratingsCache.map{x =>
+        ((x._1, x._2, x._3, x._5), x._4 match {
+          case 1000 => 1
+          case 2000 => 2
+          case 3000 => -1
+          case 4000 => 3
+        })
+    }.reduceByKey(_ + _).map{v =>
 
-    val numTraining = training.count()
-    val numValidation = validation.count()
-    val numTest = test.count()
+      (v._1._1, v._1._2, v._2 * calc(v._1._4.toString))
+    }
+    //val bcRatings = sc.broadcast(ratings)
+    var index = 0
+    //(cookieId, index)
+    val cookieIdMap = ratings.map(_._1).distinct().map{
+      x =>
+        index = index + 1
+        (x, index)
+    }.collectAsMap()
 
-    println("Training: " + numTraining + ", validation: " + numValidation + ", test: " + numTest)
+    //with index (index, goodsId, score)
+    val replacedRatings = ratings.map{x => Rating(cookieIdMap(x._1), x._2.toInt, x._3.toDouble)}
     val rank = 12
     val lambda = 0.1
     val numIter = 20
-    val model = ALS.train(training, rank, numIter, lambda)
+    val model = ALS.train(replacedRatings, rank, numIter, lambda)
 
-    val result = userIdMap.map{ x =>
+    val result = cookieIdMap.map{ x =>
       var r: Array[Rating] = Array()
       try {
-         r = model.recommendProducts(x._1, 20)
+         r = model.recommendProducts(x._2, 20)
       }catch {
         case ex:NoSuchElementException =>
       }
-      (x._2, r)
+      (x._1, r)
     }.toMap
+    print("result ================ " + result.size)
     val jedisPool = getJedisPool
     saveToRedis(conf, jedisPool, result)
 
-    // clean up
+    // clean up*/
     sc.stop()
   }
 
@@ -102,5 +104,13 @@ object GuessWhatYouLike {
       }
     }
     println("finished saving data to redis")
+  }
+
+  def calc(day: String): Double = {
+      val now = (new Date).getTime
+      val dateFormat = new SimpleDateFormat("yyyyMMdd")
+      val d = dateFormat.parse(day)
+      val n = this.effectDay - (now - d.getTime)/(24 * 60 * 60 * 1000)
+      if (n == 0 || n < 0 ) 1.0 else math.pow(attenuationRatio, n)
   }
 }
