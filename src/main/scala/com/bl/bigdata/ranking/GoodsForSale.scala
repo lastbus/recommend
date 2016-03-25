@@ -4,6 +4,7 @@ import com.bl.bigdata.util.RedisUtil._
 import com.bl.bigdata.util.{ConfigurationBL, Tool, ToolRunner}
 import com.redislabs.provider.redis._
 import org.apache.logging.log4j.LogManager
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import redis.clients.jedis.JedisPool
 
@@ -14,16 +15,9 @@ import redis.clients.jedis.JedisPool
 class GoodsForSale extends Tool {
   private val logger = LogManager.getLogger(this.getClass.getName)
 
-  def toRedis2(sc: SparkContext, jedisPool: JedisPool): Unit = {
-
-    ConfigurationBL.parseConfFile("recmd-conf.xml")
-    val inputPath = ConfigurationBL.get("")
-    val outputPath = ConfigurationBL.get("")
-    val delimiter = ConfigurationBL.get("", "\t")
-    val local = outputPath.contains("local")
-    val redis = outputPath.contains("redis")
-
-    val r = sc.textFile(inputPath)
+  def toRedis2(rdd: RDD[String], jedisPool: JedisPool): Unit = {
+    val delimiter = ConfigurationBL.get("goods.for.sale.delimiter", "\t")
+    val r = rdd
       .map(line => {
         val w = line.split(delimiter)
         (w(0), w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11))
@@ -66,51 +60,39 @@ class GoodsForSale extends Tool {
 
   }
 
-  def test(jedisPool : JedisPool) = {
-    val jedis = jedisPool.getResource
-    val v = jedis.get("rcmd_cate_194453")
-    println(v)
-  }
-
-  def toRedis1(sc: SparkContext, jedisPool: JedisPool): Unit = {
-
-    val readRDD = sc.textFile("D:\\2016-03-21\\goods_avaialbe_for_sale").map(line => {
+  def toRedis1(rdd: RDD[String], jedisPool: JedisPool): Unit = {
+    val readRDD = rdd.map(line => {
       val w = line.split("\t")
       // goodsID, categoryID
       (w(0), w(7))
     }).distinct
-
-    val count1 = sc.accumulator(0, "goodsID-categoryID")
-    val count2 = sc.accumulator(0, "categoryID-goodsIDs")
-
+    val sc = rdd.sparkContext
     val goodsIDToCategoryIDRDD = readRDD map { case (goodsID, categoryID) => ("rcmd_cate_" + goodsID, categoryID)}
     sc.toRedisKV(goodsIDToCategoryIDRDD)
-//println(count1)
     val categoryIDToGoodsID = readRDD.map(s => (s._2, Seq(s._1))).reduceByKey(_ ++ _)
         .map { case (categoryID, goodsID) => ("rcmd_cate_goods_" + categoryID, goodsID.mkString("#"))}
-
     sc.toRedisKV(categoryIDToGoodsID)
-
-    println(
-      s"""count1: $count1
-
-          |count2: $count2
-       """.
-        stripMargin)
   }
 
   override def run(args: Array[String]): Unit = {
 
-    val sparkConf = new SparkConf().setMaster("local[*]").setAppName(this.getClass.getName)
-    sparkConf.set("redis.host", "10.201.128.216")
-    sparkConf.set("redis.port", "6379")
-    sparkConf.set("redis.timeout", "10000")
+    ConfigurationBL.parseConfFile("recmd-conf.xml")
+    val inputPath = ConfigurationBL.get("goods.for.sale.input.path")
+    val outputPath = ConfigurationBL.get("goods.for.sale.output.path")
+    val local = outputPath.contains("local")
+    val redis = outputPath.contains("redis")
+
+    val sparkConf = new SparkConf().setAppName(ConfigurationBL.get("goods.for.sale.app.name", this.getClass.getName))
+    if (local) sparkConf.setMaster("local[*]")
+    if (redis) {
+      for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
+        sparkConf.set(k, v)
+    }
     val sc = new SparkContext(sparkConf)
+    val rawRDD = sc.textFile(inputPath)
     val jedisPool = getJedisPool
-    toRedis2(sc, jedisPool)
-    //    test(jedisPool)
-    toRedis1(sc, jedisPool)
-    //        category(sc, jedisPool)
+    toRedis1(rawRDD, jedisPool)
+    toRedis2(rawRDD, jedisPool)
     jedisPool.destroy()
     sc.stop()
   }

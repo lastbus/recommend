@@ -27,16 +27,6 @@ object ConfigurationBL extends ConfigurableBL {
       }
   }
 
-  /** Get a parameter, throws an exception if not found */
-  def get(key: String): String = {
-    getOption(key).getOrElse(throw new NoSuchElementException)
-  }
-  /** Get a parameter, falling back to a default if not set */
-  def get(key: String, defaultValue: String): String = {
-    if(setting.isEmpty) logger.warn("configuration is empty!")
-    getOption(key).getOrElse(defaultValue)
-  }
-
   /** Get a parameter as an Option */
   def getOption(key: String): Option[String] = {
     Option(setting.get(key))
