@@ -6,7 +6,7 @@
     </property>
     <property>
         <name>goods.for.sale.output.path</name>
-        <value>local:re0dis</value>
+        <value>local:redis</value>
     </property>
 
     <property>

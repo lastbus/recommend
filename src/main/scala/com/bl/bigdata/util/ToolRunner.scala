@@ -19,7 +19,7 @@ trait ToolRunner extends Tool with Serializable {
       super.run(args)
     } catch {
       case e: Exception =>
-        logger.info(s"encounter error, program exit: ${e.getMessage}")
+        logger.info(s"encounter error, program exit: ${e.printStackTrace()}")
     }
     val end = new Date
     logger.info(s"task ends at: ${sdf.format(end)}\n  time taken: ${(end.getTime - start.getTime) / 1000} s ")

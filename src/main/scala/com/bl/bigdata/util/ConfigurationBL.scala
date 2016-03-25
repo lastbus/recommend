@@ -14,17 +14,17 @@ import scala.xml.XML
 object ConfigurationBL extends ConfigurableBL {
 
   private val logger = LogManager.getLogger(this.getClass)
-  private val setting = new ConcurrentHashMap[String, String]()
+  private val setting = new ConcurrentHashMap[String, String]
 
   /** 解析配置文件 */
   def parseConfFile(file: String): Unit = {
-    val kV = addResource(file)
-    if (!kV.isEmpty)
-      for ((key, value) <- kV) {
-        if(setting.containsKey(key))
-          logger.warn(s"$key's origin value ${setting.get(key)} is overriding by $value.")
-        setting.put(key, value)
-      }
+//    val kV = addResource(file)
+//    if (!kV.isEmpty)
+//      for ((key, value) <- kV) {
+//        if(setting.containsKey(key))
+//          logger.warn(s"$key's origin value ${setting.get(key)} is overriding by $value.")
+//        setting.put(key, value)
+//      }
   }
 
   /** Get a parameter as an Option */
@@ -36,7 +36,7 @@ object ConfigurationBL extends ConfigurableBL {
     setting.entrySet().asScala.map(x => (x.getKey, x.getValue)).toArray
   }
 
-  def addResource(path: String): Traversable[(String, String)] ={
+  def addResource(path: String) = {
     logger.info(s"begin to parse configuration file: $path.")
     val xml = XML.load(path)
     val properties = xml \ "property"
@@ -52,7 +52,13 @@ object ConfigurationBL extends ConfigurableBL {
       i += 1
     }
     logger.info(s"parse finished, loaded ${size} properties.")
-    keyValues
+    if (!keyValues.isEmpty)
+      for ((key, value) <- keyValues) {
+        if(setting.containsKey(key))
+          logger.warn(s"$key's origin value ${setting.get(key)} is overriding by $value.")
+        setting.put(key, value)
+      }
+
   }
 
 }
