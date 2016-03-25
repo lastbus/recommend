@@ -1,6 +1,5 @@
 package com.bl.bigdata.useranalyze
 
-import com.bl.bigdata.useranalyze.BrowserNotBuy
 import org.junit._
 
 /**

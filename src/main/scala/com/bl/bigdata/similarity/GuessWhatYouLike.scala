@@ -1,18 +1,23 @@
 package com.bl.bigdata.similarity
 
+
 import com.bl.bigdata.util.{ToolRunner, Tool}
+import java.text.SimpleDateFormat
+import java.util.{Date, NoSuchElementException}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rating}
 import org.apache.spark.rdd._
 import org.apache.spark.{SparkConf, SparkContext}
 import redis.clients.jedis.JedisPool
-import scala.collection.immutable.HashMap
 import com.bl.bigdata.util.RedisUtil._
 
 /**
  * Created by blemall on 3/23/16.
  */
+
 class GuessWhatYouLike extends Tool {
+  val attenuationRatio = 0.95
+  val effectDay = 5
 
   /** Compute RMSE (Root Mean Squared Error). */
   def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
@@ -23,122 +28,100 @@ class GuessWhatYouLike extends Tool {
     math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
   }
 
-  def saveToRedis(sparkConf: SparkConf ,jedisPool: JedisPool, values: Map[Integer, Array[Rating]]): Unit = {
-    sparkConf.set("redis.host", "10.201.128.216")
-    sparkConf.set("redis.port", "6379")
-    sparkConf.set("redis.timeout", "10000")
-    val jedis = jedisPool.getResource
-    import com.bl.bigdata.util.implicts.map2HashMap
-    values.map{v =>
-      val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
-      jedis.hmset(v._1.toString, map)
-    }
-  }
-
   override def run(args: Array[String]): Unit = {
+
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
     if (args.length != 1) {
       println("spark-submit --master local[*] --class com.bailian.bigdata.similarity.GuessWhatYouLike recommend-1.0-SNAPSHOT.jar " +
-        "user_product_score")
+        "user_behavior_raw_data")
       sys.exit(1)
     }
 
     // set up environment
     val conf = new SparkConf()
       .setAppName("GuessWhatYouLike")
-      .set("spark.executor.memory", "2g")
+      .set("spark.executor.memory", "5g")
       .setMaster("local[*]")
     val sc = new SparkContext(conf)
-    // load ratings and movie titles
-
     val ratingsFilePath = args(0).trim
     val ratingsCache =sc.textFile(ratingsFilePath).map { line =>
       val fields = line.split("\t")
-      // format: (timestamp % 10, Rating(userId, movieId, rating))
-      (fields(0), fields(1).toInt, fields(2).toInt, fields(3).toDouble, fields(4).toLong)
+      //(cookieId, goodsId, goodsName, behaviorType, dt)
+      (fields(0), fields(3).toInt, fields(4), fields(7).toInt, fields(10))
     }.cache()
-    val ratings = ratingsCache.map{x => (x._5 % 10, Rating(x._2, x._3, x._4))}
-    val userIdMap = ratingsCache.map(x => (x._3, x._2))
-    val numRatings = ratings.count()
-    val users = ratings.map(_._2.user).distinct()
-    val numUsers = users.count()
-    val numProducts = ratings.map(_._2.product).distinct().count()
 
-    println("Got " + numRatings + " ratings from " + numUsers + " users on " + numProducts + " products.")
+    val ratings = ratingsCache.map{x =>
+        ((x._1, x._2, x._3, x._5), x._4 match {
+          case 1000 => 1
+          case 2000 => 2
+          case 3000 => -1
+          case 4000 => 3
+        })
+    }.reduceByKey(_ + _).map{v =>
 
-    // split ratings into train (60%), validation (20%), and test (20%) based on the
-    // last digit of the timestamp, add myRatings to train, and cache them
+      (v._1._1, v._1._2, v._2 * calc(v._1._4.toString))
+    }
+    //val bcRatings = sc.broadcast(ratings)
+    var index = 0
+    //(cookieId, index)
+    val cookieIdMap = ratings.map(_._1).distinct().map{
+      x =>
+        index = index + 1
+        (x, index)
+    }.collectAsMap()
 
-    val numPartitions = 4
-    val training = ratings.filter(x => x._1 < 6)
-      .values
-      .repartition(numPartitions)
-      .cache()
-    val validation = ratings.filter(x => x._1 >= 6 && x._1 < 8)
-      .values
-      .repartition(numPartitions)
-      .cache()
-    val test = ratings.filter(x => x._1 >= 8).values.cache()
+    //with index (index, goodsId, score)
+    val replacedRatings = ratings.map{x => Rating(cookieIdMap(x._1), x._2.toInt, x._3.toDouble)}
+    val rank = 12
+    val lambda = 0.1
+    val numIter = 20
+    val model = ALS.train(replacedRatings, rank, numIter, lambda)
 
-    val numTraining = training.count()
-    val numValidation = validation.count()
-    val numTest = test.count()
-
-    println("Training: " + numTraining + ", validation: " + numValidation + ", test: " + numTest)
-
-    // train models and evaluate them on the validation set
-
-    val ranks = List(8, 12)
-    val lambdas = List(0.1, 10.0)
-    val numIters = List(10, 20)
-    var bestModel: Option[MatrixFactorizationModel] = None
-    var bestValidationRmse = Double.MaxValue
-    var bestRank = 0
-    var bestLambda = -1.0
-    var bestNumIter = -1
-    for (rank <- ranks; lambda <- lambdas; numIter <- numIters) {
-      val model = ALS.train(training, rank, numIter, lambda)
-      val validationRmse = computeRmse(model, validation, numValidation)
-      println("RMSE (validation) = " + validationRmse + " for the model trained with rank = "
-        + rank + ", lambda = " + lambda + ", and numIter = " + numIter + ".")
-      if (validationRmse < bestValidationRmse) {
-        bestModel = Some(model)
-        bestValidationRmse = validationRmse
-        bestRank = rank
-        bestLambda = lambda
-        bestNumIter = numIter
+    val result = cookieIdMap.map{ x =>
+      var r: Array[Rating] = Array()
+      try {
+         r = model.recommendProducts(x._2, 20)
+      }catch {
+        case ex:NoSuchElementException =>
       }
-    }
-    // evaluate the best model on the test set
-    val testRmse = computeRmse(bestModel.get, test, numTest)
-    println("The best model was trained with rank = " + bestRank + " and lambda = " + bestLambda
-      + ", and numIter = " + bestNumIter + ", and its RMSE on the test set is " + testRmse + ".")
-
-    // create a naive baseline and compare it with the best model
-
-    val meanRating = training.union(validation).map(_.rating).mean
-    val baselineRmse = math.sqrt(test.map(x => (meanRating - x.rating) * (meanRating - x.rating)).mean)
-    val improvement = (baselineRmse - testRmse) / baselineRmse * 100
-    println("The best model improves the baseline by " + "%1.2f".format(improvement) + "%.")
-    //loop on bestModel and input data to redis
-    val result: Map[Integer, Array[Rating]] = new HashMap[Integer, Array[Rating]]()
-    val model = bestModel.get
-    userIdMap.map{ x =>
-      val v = model.recommendProducts(x._2, 20)
-      result.+((x._1, v))
-    }
+      (x._1, r)
+    }.toMap
+    print("result ================ " + result.size)
     val jedisPool = getJedisPool
     saveToRedis(conf, jedisPool, result)
 
-    // clean up
+    // clean up*/
     sc.stop()
   }
+  def saveToRedis(sparkConf: SparkConf ,jedisPool: JedisPool, values: Map[String, Array[Rating]]): Unit = {
+    sparkConf.set("redis.host", "10.201.128.216")
+    sparkConf.set("redis.port", "6379")
+    sparkConf.set("redis.timeout", "10000")
+    val jedis = jedisPool.getResource
+    import com.bl.bigdata.util.Implicts.map2HashMap
+    values.map{v =>
+      val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
+      if(map.nonEmpty) {
+        jedis.hmset("rcmd_gwyl_" + v._1.toString, map)
+      }
+    }
+    println("finished saving data to redis")
+  }
+
+  def calc(day: String): Double = {
+    val now = (new Date).getTime
+    val dateFormat = new SimpleDateFormat("yyyyMMdd")
+    val d = dateFormat.parse(day)
+    val n = this.effectDay - (now - d.getTime)/(24 * 60 * 60 * 1000)
+    if (n == 0 || n < 0 ) 1.0 else math.pow(attenuationRatio, n)
+
+  }
+
 }
 
 object GuessWhatYouLike {
-
   def main(args: Array[String]) {
     (new GuessWhatYouLike with ToolRunner).run(args)
   }

@@ -3,7 +3,7 @@ package com.bl.bigdata.util
 import com.redislabs.provider.redis.{RedisEndpoint, RedisConfig, RedisContext}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import implicts._
+import Implicts._
 
 /**
   * Created by MK33 on 2016/3/25.
