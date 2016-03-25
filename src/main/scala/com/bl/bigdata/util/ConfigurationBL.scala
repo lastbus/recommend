@@ -1,8 +1,6 @@
 package com.bl.bigdata.util
 
 import java.util.concurrent.ConcurrentHashMap
-import org.apache.hadoop.conf.Configuration
-
 import scala.collection.JavaConverters._
 import org.apache.logging.log4j.LogManager
 
