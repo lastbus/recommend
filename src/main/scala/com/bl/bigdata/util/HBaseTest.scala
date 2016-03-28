@@ -1,13 +1,12 @@
 package com.bl.bigdata.util
 
 import org.apache.hadoop.hbase.HBaseConfiguration
-import org.apache.hadoop.hbase.client.{Result, Put}
-import org.apache.hadoop.hbase.mapreduce.{TableInputFormat, TableOutputFormat}
+import org.apache.hadoop.hbase.client.{Put, Result}
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.mapreduce.Job
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.{SparkConf, SparkContext}
 
 /**
   * Created by MK33 on 2016/3/8.
@@ -33,7 +32,7 @@ object HBaseTest {
     put2.addColumn(Bytes.toBytes("column_family1"), Bytes.toBytes("test"), Bytes.toBytes("1"))
     val puts = Array(put, put2)
     val localData = Array(("a", args(0)), ("b", args(1)))
-    println(puts.size)
+    println(puts.length)
 
     val r = sc.parallelize(localData).
       map(s =>{

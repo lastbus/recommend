@@ -1,6 +1,5 @@
 package com.bl.bigdata.useranalyze
 
-import com.bl.bigdata.useranalyze.BrowserNotBuy
 import org.junit._
 
 /**
@@ -16,7 +15,7 @@ class BrowserNotBuyTest {
                                 ("c1", "g13"), ("c2", "g23"), ("c3", "g33"))
     val result = """c1:g1,g12,g13#c2:g2,g22,g23#c3:g3,g32,g33"""
 
-    val r = BrowserNotBuy.format(categoryGoodsID)
+    val r = (new BrowserNotBuy).format(categoryGoodsID)
     println(r)
     assert(r.contains("c1:g1,g12,g13") &&
       r.contains("c2:g2,g22,g23") &&

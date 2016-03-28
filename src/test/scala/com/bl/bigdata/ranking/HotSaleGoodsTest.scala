@@ -7,7 +7,7 @@ import org.junit._
  */
 @Test
 class HotSaleGoodsTest {
-  val test = HotSaleGoods
+  val test = new HotSaleGoods
 
   @Test
   def testGetDateBeforeNow = {

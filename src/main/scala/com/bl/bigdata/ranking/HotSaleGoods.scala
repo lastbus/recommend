@@ -3,7 +3,7 @@ package com.bl.bigdata.ranking
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.util.ConfigurationBL
+import com.bl.bigdata.util.{ToolRunner, Tool, ConfigurationBL}
 import com.redislabs.provider.redis._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkConf, SparkContext}
@@ -14,27 +14,44 @@ import redis.clients.jedis.{JedisPool, JedisPoolConfig}
  * 最近一天、七天，n 天，乘上一个权重
  * Created by MK33 on 2016/3/21.
  */
-object HotSaleGoods {
+class HotSaleGoods extends Tool {
 
   private val logger = LogManager.getLogger(this.getClass)
 
-  def main(args: Array[String]): Unit = {
+  /**
+   * 计算今天前 n 天的日期
+ *
+   * @param n 前 n 天
+   * @return n 天前的日期
+   */
+  def getDateBeforeNow(n: Int): String = {
+    val now = new Date
+    val beforeMill = now.getTime - 24L * 60 * 60 * 1000 * n
+    val before = new Date(beforeMill)
+    val sdf = new SimpleDateFormat("yyyy-MM-dd")
+    sdf.format(before)
+  }
 
-    val hotSaleConf = new ConfigurationBL()
-    hotSaleConf.parseConfFile("hot-sale.xml")
-    val output = hotSaleConf.get("hot.sale.output")
+
+  def filterDate(item: (String, String, Double, String, String, String), deadTime: String): Boolean = {
+    item._4 >= deadTime
+  }
+
+  override def run(args: Array[String]): Unit = {
+    ConfigurationBL.parseConfFile("hot-sale.xml")
+    val output = ConfigurationBL.get("hot.sale.output")
     val redis = output.contains("redis")
     val local = output.contains("local")
 
-    val deadTimeOne = getDateBeforeNow(hotSaleConf.get("day.before.today.one").toInt)
-    val deadTimeOneIndex = hotSaleConf.get("hot.sale.index.one").toDouble
-    val deadTimeTwo = getDateBeforeNow(hotSaleConf.get("day.before.today.two").toInt)
+    val deadTimeOne = getDateBeforeNow(ConfigurationBL.get("day.before.today.one").toInt)
+    val deadTimeOneIndex = ConfigurationBL.get("hot.sale.index.one").toDouble
+    val deadTimeTwo = getDateBeforeNow(ConfigurationBL.get("day.before.today.two").toInt)
 
     val sparkConf = new SparkConf()
       .setMaster("local[*]")
       .setAppName(this.getClass.getName)
     if (redis) {
-      for ((key, value) <- hotSaleConf.getAll.filter(_._1.startsWith("redis."))){
+      for ((key, value) <- ConfigurationBL.getAll.filter(_._1.startsWith("redis."))){
         sparkConf.set(key, value)
       }
     }
@@ -65,34 +82,19 @@ object HotSaleGoods {
       logger.info("begin to write to local")
       var i = 0
       result.collect().foreach { case (category, ranking) =>
-          val jedis = jedisPool.getResource
-          jedis.set("rcmd_cate_hotsale_" + category, ranking)
-          jedis.close()
-          i += 1
-        }
+        val jedis = jedisPool.getResource
+        jedis.set("rcmd_cate_hotsale_" + category, ranking)
+        jedis.close()
+        i += 1
+      }
       logger.info(s"$i key-values are written to local finished.")
     }
-
-
   }
+}
 
-  /**
-   * 计算今天前 n 天的日期
- *
-   * @param n 前 n 天
-   * @return n 天前的日期
-   */
-  def getDateBeforeNow(n: Int): String = {
-    val now = new Date
-    val beforeMill = now.getTime - 24L * 60 * 60 * 1000 * n
-    val before = new Date(beforeMill)
-    val sdf = new SimpleDateFormat("yyyy-MM-dd")
-    sdf.format(before)
+object HotSaleGoods {
+
+  def main(args: Array[String]) {
+    (new HotSaleGoods with ToolRunner).run(args)
   }
-
-
-  def filterDate(item: (String, String, Double, String, String, String), deadTime: String): Boolean = {
-    item._4 >= deadTime
-  }
-
 }

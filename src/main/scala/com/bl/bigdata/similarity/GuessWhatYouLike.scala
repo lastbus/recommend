@@ -1,5 +1,7 @@
 package com.bl.bigdata.similarity
 
+
+import com.bl.bigdata.util.{ToolRunner, Tool}
 import java.text.SimpleDateFormat
 import java.util.{Date, NoSuchElementException}
 import org.apache.log4j.{Level, Logger}
@@ -12,10 +14,22 @@ import com.bl.bigdata.util.RedisUtil._
 /**
  * Created by blemall on 3/23/16.
  */
-object GuessWhatYouLike {
+
+class GuessWhatYouLike extends Tool {
   val attenuationRatio = 0.95
   val effectDay = 5
-  def main(args: Array[String]) {
+
+  /** Compute RMSE (Root Mean Squared Error). */
+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
+    val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
+    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
+      .join(data.map(x => ((x.user, x.product), x.rating)))
+      .values
+    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
+  }
+
+  override def run(args: Array[String]): Unit = {
+
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
@@ -81,16 +95,6 @@ object GuessWhatYouLike {
     // clean up*/
     sc.stop()
   }
-
-  /** Compute RMSE (Root Mean Squared Error). */
-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
-    val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
-    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
-      .join(data.map(x => ((x.user, x.product), x.rating)))
-      .values
-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
-  }
-
   def saveToRedis(sparkConf: SparkConf ,jedisPool: JedisPool, values: Map[String, Array[Rating]]): Unit = {
     sparkConf.set("redis.host", "10.201.128.216")
     sparkConf.set("redis.port", "6379")
@@ -107,10 +111,18 @@ object GuessWhatYouLike {
   }
 
   def calc(day: String): Double = {
-      val now = (new Date).getTime
-      val dateFormat = new SimpleDateFormat("yyyyMMdd")
-      val d = dateFormat.parse(day)
-      val n = this.effectDay - (now - d.getTime)/(24 * 60 * 60 * 1000)
-      if (n == 0 || n < 0 ) 1.0 else math.pow(attenuationRatio, n)
+    val now = (new Date).getTime
+    val dateFormat = new SimpleDateFormat("yyyyMMdd")
+    val d = dateFormat.parse(day)
+    val n = this.effectDay - (now - d.getTime)/(24 * 60 * 60 * 1000)
+    if (n == 0 || n < 0 ) 1.0 else math.pow(attenuationRatio, n)
+
+  }
+
+}
+
+object GuessWhatYouLike {
+  def main(args: Array[String]) {
+    (new GuessWhatYouLike with ToolRunner).run(args)
   }
 }
