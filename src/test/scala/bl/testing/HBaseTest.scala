@@ -1,4 +1,4 @@
-package com.bl.bigdata.util
+package bl.testing
 
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.{Put, Result}

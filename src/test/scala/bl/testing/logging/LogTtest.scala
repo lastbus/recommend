@@ -1,4 +1,4 @@
-package com.bl.bigdata.logging
+package bl.testing.logging
 
 import org.apache.hadoop.util.ToolRunner
 import org.apache.logging.log4j.LogManager

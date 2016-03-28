@@ -1,4 +1,4 @@
-package bl
+package bl.testing
 
 import org.junit._
 import Assert._

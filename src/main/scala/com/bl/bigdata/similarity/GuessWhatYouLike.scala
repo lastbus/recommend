@@ -21,14 +21,7 @@ class GuessWhatYouLike extends Tool {
   val rank = PropertyUtil.get("gueswhatyoulike.rank").toInt
   val lambda = PropertyUtil.get("gueswhatyoulike.lambda").toDouble
   val numIter = PropertyUtil.get("gueswhatyoulike.number.iterator").toInt
-  /** Compute RMSE (Root Mean Squared Error). */
-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
-    val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
-    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
-      .join(data.map(x => ((x.user, x.product), x.rating)))
-      .values
-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
-  }
+  val REDIS_PREFIX="rcmd_gwyl_"
 
   override def run(args: Array[String]): Unit = {
 
@@ -102,10 +95,19 @@ class GuessWhatYouLike extends Tool {
     values.map{v =>
       val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
       if(map.nonEmpty) {
-        jedis.hmset("rcmd_gwyl_" + v._1.toString, map)
+        jedis.hmset(REDIS_PREFIX + v._1.toString, map)
       }
     }
     println("finished saving data to redis")
+  }
+
+  /** Compute RMSE (Root Mean Squared Error). */
+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
+    val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
+    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
+            .join(data.map(x => ((x.user, x.product), x.rating)))
+            .values
+    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
   }
 
   def calc(day: String): Double = {
