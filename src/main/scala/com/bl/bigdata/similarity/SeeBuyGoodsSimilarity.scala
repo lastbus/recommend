@@ -1,6 +1,8 @@
 package com.bl.bigdata.similarity
 
-import com.bl.bigdata.util.Tool
+import com.bl.bigdata.mail.MailServer
+import com.bl.bigdata.util.{ConfigurationBL, Tool}
+import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkContext, SparkConf}
 import com.redislabs.provider.redis._
 
@@ -11,26 +13,25 @@ import com.redislabs.provider.redis._
   * Created by MK33 on 2016/3/15.
   */
 class SeeBuyGoodsSimilarity extends Tool {
-
-  def main(args: Array[String]): Unit = {
-
-
-  }
+  private val message = new StringBuilder
+  private val logger = LogManager.getLogger(this.getClass.getName)
 
   override def run(args: Array[String]): Unit = {
-    if(args.length < 2){
-      println("Pleas input <input path> and <save path>.")
-      sys.exit(-1)
-    }
+    message.clear()
+    message.append("看了最终买:\n")
+    val inputPath = ConfigurationBL.get("user.behavior.raw.data")
+    val output = ConfigurationBL.get("recmd.output")
+    val local = output.contains("local")
+    val redis = output.contains("redis")
 
-    val inputPath = args(0)
-    val outPath = args(1)
-    val sparkConf = new SparkConf().setAppName(this.getClass.getName)
-    sparkConf.set("redis.host", "10.201.128.216")
-    sparkConf.set("redis.timeout", "10000")
-    // 如果在本地测试，将 master 设置为 local 模式
-    if (!inputPath.startsWith("/")) sparkConf.setMaster("local")
+    val sparkConf = new SparkConf().setAppName("看了最终买")
+    if (local) sparkConf.setMaster("local[*]")
+    if (redis)
+      for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
+        sparkConf.set(k, v)
+
     val sc = new SparkContext(sparkConf)
+    val accumulator = sc.accumulator(0)
 
     val rawData = sc.textFile(inputPath)
       // 提取需要的字段
@@ -41,7 +42,6 @@ class SeeBuyGoodsSimilarity extends Tool {
       // cookie,商品类别,日期,用户行为编码,商品id
       ((w(0), w(9), w(6).substring(0, w(6).indexOf(" "))), w(7), w(3))
     })
-
     // 用户浏览的商品
     val browserRdd = rawData.filter{ case ((cookie, category, date), behavior, goodsID) => behavior.equals("1000")}
       .map{ case((cookie, category, date), behavior, goodsID) => ((cookie, category, date), goodsID)}.distinct
@@ -60,15 +60,27 @@ class SeeBuyGoodsSimilarity extends Tool {
       .join(buyCountRDD)
       .map{ case (goodsIDBuy, ((goodsIDBrowser, count), buyCount)) => (goodsIDBrowser, goodsIDBuy, count.toDouble / buyCount)}
       .map{ case (goodsBrowser, goodsBuy, relation) => (goodsBrowser, Seq((goodsBuy, relation)))}
-      .reduceByKey(_ ++ _)
+      .reduceByKey((s1, s2) => { accumulator += 1; s1 ++ s2})
       .map(s => ("rcmd_shop_" + s._1, s._2.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")))
 
-    sc.toRedisKV(browserAndBuy)
+    message.append(s"插入 rcmd_shop_*: $accumulator")
     // 如果是本地运行，则直接输出，否则保存在 hadoop 中。
-    if (!inputPath.startsWith("/")) browserAndBuy.take(50).foreach(println)
+    if (local) browserAndBuy.take(50).foreach(println)
     else sc.toRedisKV(browserAndBuy)
-    //    browserAndBuy.first()
 
     sc.stop()
+  }
+}
+
+object SeeBuyGoodsSimilarity {
+
+  def main(args: Array[String]) {
+    execute(args)
+  }
+
+  def execute(args: Array[String]): Unit ={
+    val seeBuyGoodsSimilarity = new SeeBuyGoodsSimilarity
+    seeBuyGoodsSimilarity.run(args)
+    MailServer.send(seeBuyGoodsSimilarity.message.toString())
   }
 }

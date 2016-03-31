@@ -1,13 +1,121 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <configuration>
     <property>
+        <name>user.behavior.raw.data</name>
+        <value>D:\2\user_behavior_raw_data</value>
+    </property>
+    <property>
         <name>goods.for.sale.input.path</name>
         <value>D:\2016-03-21\goods_avaialbe_for_sale(1)</value>
     </property>
     <property>
+        <name>user.order.raw.data</name>
+        <value>D:\2016-03-21\user_order_raw_data</value>
+    </property>
+    <property>
+        <name>product.properties.raw.data</name>
+        <value>D:\2016-03-28\product_properties_raw_data(1)</value>
+    </property>
+    <property>
+        <name>dim.category</name>
+        <value>D:\2\dim_category</value>
+    </property>
+    <property>
+        <name>recmd.output</name>
+        <value>local:redis:h0base</value>
+    </property>
+
+    <property>
+        <name>mail.type</name>
+        <value>bl</value>
+    </property>
+
+    <property>
         <name>goods.for.sale.output.path</name>
         <value>local:redis</value>
     </property>
+    <property>
+        <name>goods.for.sale.category.input.path</name>
+        <value>D:\2\dim_category</value>
+    </property>
+    <property>
+        <name>category.similarity.input.path</name>
+        <value>D:\2\user_behavior_raw_data</value>
+    </property>
+    <property>
+        <name>category.similarity.input.category.path</name>
+        <value>D:\2\dim_category</value>
+    </property>
+    <property>
+        <name>category.similarity.output.path</name>
+        <value>local:redis</value>
+    </property>
+    <property>
+        <name>goods.similarity.in.category.input.path</name>
+        <value>D:</value>
+    </property>
+
+    <property>
+        <name>hot.sale.input.path</name>
+        <value>D:\2016-03-21\user_order_raw_data</value>
+    </property>
+    <property>
+        <name>hot.sale.output</name>
+        <value>:local</value>
+    </property>
+    <property>
+        <name>day.before.today.one</name>
+        <value>10</value>
+    </property>
+    <property>
+        <name>hot.sale.index.one</name>
+        <value>4</value>
+    </property>
+    <property>
+        <name>day.before.today.two</name>
+        <value>200</value>
+    </property>
+    <property>
+        <name>hot.sale.index.two</name>
+        <value>1</value>
+    </property>
+    <property>
+        <name>buy.similarity.input.path</name>
+        <value>D:\2\user_behavior_raw_data</value>
+    </property>
+    <property>
+        <name>buy.similarity.input.category</name>
+        <value>D:\2\dim_category</value>
+    </property>
+    <property>
+        <name>buy.similarity.output</name>
+        <value>local:redis</value>
+    </property>
+    <property>
+        <name>buy.activity.statistic.input.path</name>
+        <value>D:\2\user_behavior_raw_data</value>
+    </property>
+    <property>
+        <name>buy.activity.statistic.output</name>
+        <value>local:red0is</value>
+    </property>
+    <property>
+        <name>buy.activity.category.topNum</name>
+        <value>30</value>
+    </property>
+    <property>
+        <name>browser.input.path</name>
+        <value>D:\2\user_behavior_raw_data</value>
+    </property>
+    <property>
+        <name>browser.output</name>
+        <value>local:re0dis</value>
+    </property>
+    <property>
+        <name>browser.app.name</name>
+        <value>browser not buy</value>
+    </property>
+
 
     <property>
         <name>redis.host</name>

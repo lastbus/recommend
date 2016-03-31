@@ -6,10 +6,9 @@ import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector, Vectors
 
 
 /**
+  * Document frequency aggregator.
   * Created by MK33 on 2016/3/10.
   */
-
-/** Document frequency aggregator. */
 class DocumentFrequencyAggregator(val minDocFreq: Int) extends Serializable {
 
   /** number of documents */

@@ -46,7 +46,7 @@ object ConfigurationBL extends ConfigurableBL {
       val name = property \ "name"
       val value = property \ "value"
       keyValues(i) = (name.text.trim, value.text.trim)
-      logger.debug(name.text)
+      logger.debug(name.text + " : " + value.text)
       i += 1
     }
     logger.info(s"parse finished, loaded ${size} properties.")

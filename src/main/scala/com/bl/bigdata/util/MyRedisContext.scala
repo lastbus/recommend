@@ -4,11 +4,12 @@ import com.redislabs.provider.redis.{RedisEndpoint, RedisConfig, RedisContext}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import Implicts._
+import redis.clients.jedis.{JedisPoolConfig, JedisPool}
 
 /**
   * Created by MK33 on 2016/3/25.
   */
-class MyRedisContext(sc: SparkContext) extends RedisContext(sc: SparkContext) {
+class MyRedisContext(sc: SparkContext) extends RedisContext(sc) {
 
   import MyRedisContext._
 
@@ -48,3 +49,23 @@ object MyRedisContext {
   implicit def toMyRedisContext(sc: SparkContext): MyRedisContext = new MyRedisContext(sc)
 
 }
+
+object JedisPoolTest {
+
+  def main(args: Array[String]) {
+    val jedisPool = new JedisPool(new JedisPoolConfig, "localhost")
+import com.bl.bigdata.util.Implicts._
+    val jedis = jedisPool.getResource
+//    jedis.set("jedis", "not returned back jedis.")
+    val map = Map("a" -> "1", "b" -> "2")
+//    jedis.hmset("map", map)
+    jedis.del("map")
+    jedis.close()
+
+    jedisPool.destroy()
+
+  }
+
+
+}
+

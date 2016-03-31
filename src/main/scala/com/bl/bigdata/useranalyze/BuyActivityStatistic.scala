@@ -1,9 +1,9 @@
 package com.bl.bigdata.useranalyze
 
-import com.bl.bigdata.util.{ToolRunner, Tool, ConfigurationBL}
-import org.apache.log4j.{Level, Logger}
+import com.bl.bigdata.mail.MailServer
+import com.bl.bigdata.util.{ConfigurationBL, Tool, ToolRunner}
 import org.apache.logging.log4j.LogManager
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.{SparkConf, SparkContext}
 import redis.clients.jedis.Jedis
 
 /**
@@ -18,24 +18,26 @@ import redis.clients.jedis.Jedis
   */
 class BuyActivityStatistic extends Tool {
   private val logger = LogManager.getLogger(this.getClass.getName)
+  private val message = new StringBuilder
 
   override def run(args: Array[String]): Unit = {
+    message.clear()
+    message.append("上午 下午 晚上 购买类目:\n")
 
-    val buyActConf = ConfigurationBL.parseConfFile("buy-activity-statistic.xml")
-    val inputPath = ConfigurationBL.get("buy.activity.statistic.input.path")
-    val outputPath = ConfigurationBL.get("buy.activity.statistic.output")
+    val inputPath = ConfigurationBL.get("user.behavior.raw.data")
+    val outputPath = ConfigurationBL.get("recmd.output")
     val local = outputPath.contains("local")
     val redis = outputPath.contains("redis")
     val num = ConfigurationBL.get("buy.activity.category.topNum").toInt
 
-    val sparkConf = new SparkConf().setAppName(this.getClass.getName)
+    val sparkConf = new SparkConf().setAppName("上午 下午 晚上 购买类目")
     if (local) sparkConf.setMaster("local[*]")
-    if (redis) {
+    if (redis)
       for ((key, value) <- ConfigurationBL.getAll if key.startsWith("redis."))
         sparkConf.set(key, value)
-    }
 
     val sc = new SparkContext(sparkConf)
+
     val rawRDD = sc.textFile(inputPath).map(line => {
       val attr = line.split("\t")
       // 类目  时间  行为编码 价格
@@ -74,17 +76,25 @@ class BuyActivityStatistic extends Tool {
       jedis.set("rcmd_topcategory_afternoon", noon)
       jedis.set("rcmd_topcategory_evening", evening)
       jedis.close()
+      message.append(s"运行成功:\n上午:$morning\n中午:$noon\n晚上:$evening\n")
     }
 
     if (local) {
       logger.info(s"上午：$morning\n下午：$noon\n晚上：$evening")
     }
-
+    sc.stop()
   }
 }
 
 object BuyActivityStatistic {
+
   def main(args: Array[String]): Unit = {
-    (new BuyActivityStatistic with ToolRunner).run(args)
+    execute(args)
+  }
+
+  def execute(args: Array[String]): Unit ={
+    val buyActivityStatistic = new BuyActivityStatistic with ToolRunner
+    buyActivityStatistic.run(args)
+    MailServer.send(buyActivityStatistic.message.toString())
   }
 }
