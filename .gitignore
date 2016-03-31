@@ -70,7 +70,7 @@ metastore_db/
 metastore/
 warehouse/
 TempStatsStore/
-sql/hive-thriftserver/test_warehouses
+src/test/scala/bl/testing/sql/hive-thriftserver/test_warehouses
 
 # For R session data
 .RHistory

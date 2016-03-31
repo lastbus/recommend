@@ -1,7 +1,7 @@
 package com.bl.bigdata.similarity
 
 
-import com.bl.bigdata.util.{ToolRunner, Tool}
+import com.bl.bigdata.util.{PropertyUtil, ToolRunner, Tool}
 import java.text.SimpleDateFormat
 import java.util.{Date, NoSuchElementException}
 import org.apache.log4j.{Level, Logger}
@@ -16,17 +16,12 @@ import com.bl.bigdata.util.RedisUtil._
  */
 
 class GuessWhatYouLike extends Tool {
-  val attenuationRatio = 0.95
-  val effectDay = 5
-
-  /** Compute RMSE (Root Mean Squared Error). */
-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
-    val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
-    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
-      .join(data.map(x => ((x.user, x.product), x.rating)))
-      .values
-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
-  }
+  val attenuationRatio = PropertyUtil.get("gueswhatyoulike.attenuation.ratio").toDouble
+  val effectiveDay = PropertyUtil.get("gueswhatyoulike.effective.day").toInt
+  val rank = PropertyUtil.get("gueswhatyoulike.rank").toInt
+  val lambda = PropertyUtil.get("gueswhatyoulike.lambda").toDouble
+  val numIter = PropertyUtil.get("gueswhatyoulike.number.iterator").toInt
+  val REDIS_PREFIX="rcmd_gwyl_"
 
   override def run(args: Array[String]): Unit = {
 
@@ -43,7 +38,7 @@ class GuessWhatYouLike extends Tool {
     val conf = new SparkConf()
       .setAppName("GuessWhatYouLike")
       .set("spark.executor.memory", "5g")
-      .setMaster("local[*]")
+      .setMaster("local[*]") //only for local test
     val sc = new SparkContext(conf)
     val ratingsFilePath = args(0).trim
     val ratingsCache =sc.textFile(ratingsFilePath).map { line =>
@@ -63,7 +58,6 @@ class GuessWhatYouLike extends Tool {
 
       (v._1._1, v._1._2, v._2 * calc(v._1._4.toString))
     }
-    //val bcRatings = sc.broadcast(ratings)
     var index = 0
     //(cookieId, index)
     val cookieIdMap = ratings.map(_._1).distinct().map{
@@ -74,9 +68,6 @@ class GuessWhatYouLike extends Tool {
 
     //with index (index, goodsId, score)
     val replacedRatings = ratings.map{x => Rating(cookieIdMap(x._1), x._2.toInt, x._3.toDouble)}
-    val rank = 12
-    val lambda = 0.1
-    val numIter = 20
     val model = ALS.train(replacedRatings, rank, numIter, lambda)
 
     val result = cookieIdMap.map{ x =>
@@ -104,21 +95,28 @@ class GuessWhatYouLike extends Tool {
     values.map{v =>
       val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
       if(map.nonEmpty) {
-        jedis.hmset("rcmd_gwyl_" + v._1.toString, map)
+        jedis.hmset(REDIS_PREFIX + v._1.toString, map)
       }
     }
     println("finished saving data to redis")
+  }
+
+  /** Compute RMSE (Root Mean Squared Error). */
+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long): Double = {
+    val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
+    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
+            .join(data.map(x => ((x.user, x.product), x.rating)))
+            .values
+    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
   }
 
   def calc(day: String): Double = {
     val now = (new Date).getTime
     val dateFormat = new SimpleDateFormat("yyyyMMdd")
     val d = dateFormat.parse(day)
-    val n = this.effectDay - (now - d.getTime)/(24 * 60 * 60 * 1000)
+    val n = this.effectiveDay - (now - d.getTime)/(24 * 60 * 60 * 1000)
     if (n == 0 || n < 0 ) 1.0 else math.pow(attenuationRatio, n)
-
   }
-
 }
 
 object GuessWhatYouLike {

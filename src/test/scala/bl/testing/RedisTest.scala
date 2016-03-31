@@ -1,7 +1,7 @@
-package com.bl.bigdata.util
+package bl.testing
 
-import org.apache.spark.{SparkContext, SparkConf}
-import redis.clients.jedis.{Protocol, JedisPoolConfig, JedisPool, Jedis}
+import org.apache.spark.{SparkConf, SparkContext}
+import redis.clients.jedis.{JedisPool, JedisPoolConfig, Protocol}
 
 /**
   * Created by MK33 on 2016/3/21.
