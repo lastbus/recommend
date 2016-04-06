@@ -1,4 +1,4 @@
-package bl.testing
+package bl.testing.mess
 
 import org.apache.spark.{SparkConf, SparkContext}
 import redis.clients.jedis.{JedisPool, JedisPoolConfig, Protocol}

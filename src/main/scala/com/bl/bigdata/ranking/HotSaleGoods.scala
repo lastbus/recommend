@@ -3,11 +3,12 @@ package com.bl.bigdata.ranking
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.SparkEnv
 import com.bl.bigdata.mail.MailServer
 import com.bl.bigdata.util.{ToolRunner, Tool, ConfigurationBL}
 import com.redislabs.provider.redis._
 import org.apache.logging.log4j.LogManager
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkContext
 import redis.clients.jedis.{JedisPool, JedisPoolConfig}
 
 /**
@@ -15,7 +16,7 @@ import redis.clients.jedis.{JedisPool, JedisPoolConfig}
  * 最近一天、七天，n 天，乘上一个权重
  * Created by MK33 on 2016/3/21.
  */
-class HotSaleGoods extends Tool {
+class HotSaleGoods extends Tool with SparkEnv{
 
   private val logger = LogManager.getLogger(this.getClass)
   private val message = new StringBuilder
@@ -31,14 +32,10 @@ class HotSaleGoods extends Tool {
     val deadTimeOne = HotSaleGoods.getDateBeforeNow(ConfigurationBL.get("day.before.today.one").toInt)
     val deadTimeOneIndex = ConfigurationBL.get("hot.sale.index.one").toDouble
     val deadTimeTwo = HotSaleGoods.getDateBeforeNow(ConfigurationBL.get("day.before.today.two").toInt)
-
-    val sparkConf = new SparkConf()
-      .setMaster("local[*]")
-      .setAppName("品类热销商品")
+    sparkConf.setMaster("local[*]").setAppName("品类热销商品")
     if (redis)
       for ((key, value) <- ConfigurationBL.getAll.filter(_._1.startsWith("redis.")))
         sparkConf.set(key, value)
-    val sc = new SparkContext(sparkConf)
     val accumulator = sc.accumulator(0)
 
     val result = sc.textFile(input).map(line => {
@@ -76,9 +73,6 @@ class HotSaleGoods extends Tool {
     }
     sc.stop()
   }
-
-
-
 }
 
 object HotSaleGoods {

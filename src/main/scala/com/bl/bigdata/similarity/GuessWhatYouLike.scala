@@ -1,33 +1,25 @@
 package com.bl.bigdata.similarity
 
-
-import com.bl.bigdata.util.{PropertyUtil, ToolRunner, Tool}
+import com.bl.bigdata.SparkEnv
+import com.bl.bigdata.util.{RedisUtil, PropertyUtil, ToolRunner, Tool}
 import java.text.SimpleDateFormat
 import java.util.{Date, NoSuchElementException}
-import org.apache.log4j.{Level, Logger}
 import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rating}
 import org.apache.spark.rdd._
-import org.apache.spark.{SparkConf, SparkContext}
-import redis.clients.jedis.JedisPool
 import com.bl.bigdata.util.RedisUtil._
 
 /**
  * Created by blemall on 3/23/16.
  */
 
-class GuessWhatYouLike extends Tool {
-  val attenuationRatio = PropertyUtil.get("gueswhatyoulike.attenuation.ratio").toDouble
-  val effectiveDay = PropertyUtil.get("gueswhatyoulike.effective.day").toInt
-  val rank = PropertyUtil.get("gueswhatyoulike.rank").toInt
-  val lambda = PropertyUtil.get("gueswhatyoulike.lambda").toDouble
-  val numIter = PropertyUtil.get("gueswhatyoulike.number.iterator").toInt
-  val REDIS_PREFIX="rcmd_gwyl_"
+class GuessWhatYouLike extends Tool with SparkEnv{
+  val attenuationRatio = PropertyUtil.get("guesswhatyoulike.attenuation.ratio").toDouble
+  val effectiveDay = PropertyUtil.get("guesswhatyoulike.effective.day").toInt
+  val rank = PropertyUtil.get("guesswhatyoulike.rank").toInt
+  val lambda = PropertyUtil.get("guesswhatyoulike.lambda").toDouble
+  val numIter = PropertyUtil.get("guesswhatyoulike.number.iterator").toInt
 
   override def run(args: Array[String]): Unit = {
-
-    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
-    Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
-
     if (args.length != 1) {
       println("spark-submit --master local[*] --class com.bailian.bigdata.similarity.GuessWhatYouLike recommend-1.0-SNAPSHOT.jar " +
         "user_behavior_raw_data")
@@ -35,11 +27,8 @@ class GuessWhatYouLike extends Tool {
     }
 
     // set up environment
-    val conf = new SparkConf()
-      .setAppName("GuessWhatYouLike")
-      .set("spark.executor.memory", "5g")
-      //.setMaster("local[*]") //only for local test
-    val sc = new SparkContext(conf)
+    sparkConf.setAppName("GuessWhatYouLike").set("spark.executor.memory", "5g")
+    //.setMaster("local[*]") //only for local test
     val ratingsFilePath = args(0).trim
     val ratingsCache =sc.textFile(ratingsFilePath).map { line =>
       val fields = line.split("\t")
@@ -81,24 +70,11 @@ class GuessWhatYouLike extends Tool {
     }.toMap
     print("result ================ " + result.size)
     val jedisPool = getJedisPool
-    saveToRedis(conf, jedisPool, result)
+
+    RedisUtil.guessWhatYouLike_saveToRedis(sparkConf, jedisPool, result)
 
     // clean up*/
     sc.stop()
-  }
-  def saveToRedis(sparkConf: SparkConf ,jedisPool: JedisPool, values: Map[String, Array[Rating]]): Unit = {
-    sparkConf.set("redis.host", "10.201.128.216")
-    sparkConf.set("redis.port", "6379")
-    sparkConf.set("redis.timeout", "10000")
-    val jedis = jedisPool.getResource
-    import com.bl.bigdata.util.Implicts.map2HashMap
-    values.map{v =>
-      val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
-      if(map.nonEmpty) {
-        jedis.hmset(REDIS_PREFIX + v._1.toString, map)
-      }
-    }
-    println("finished saving data to redis")
   }
 
   /** Compute RMSE (Root Mean Squared Error). */

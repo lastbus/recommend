@@ -45,6 +45,4 @@ object MailServer {
       email
     }
   }
-
-
 }

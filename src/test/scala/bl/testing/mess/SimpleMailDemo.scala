@@ -1,4 +1,4 @@
-package com.bl.bigdata.mail
+package bl.testing.mess
 
 import org.apache.commons.mail.{DefaultAuthenticator, SimpleEmail}
 

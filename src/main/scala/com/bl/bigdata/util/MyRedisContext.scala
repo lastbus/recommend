@@ -18,7 +18,6 @@ class MyRedisContext(sc: SparkContext) extends RedisContext(sc) {
     kvs.foreachPartition(partition => setHashKVs(partition, ttl, redisConfig))
 
   }
-
 }
 
 object MyRedisContext {
@@ -47,25 +46,20 @@ object MyRedisContext {
   }
 
   implicit def toMyRedisContext(sc: SparkContext): MyRedisContext = new MyRedisContext(sc)
-
 }
 
 object JedisPoolTest {
 
   def main(args: Array[String]) {
     val jedisPool = new JedisPool(new JedisPoolConfig, "localhost")
-import com.bl.bigdata.util.Implicts._
+    import com.bl.bigdata.util.Implicts._
     val jedis = jedisPool.getResource
 //    jedis.set("jedis", "not returned back jedis.")
     val map = Map("a" -> "1", "b" -> "2")
 //    jedis.hmset("map", map)
     jedis.del("map")
     jedis.close()
-
     jedisPool.destroy()
-
   }
-
-
 }
 

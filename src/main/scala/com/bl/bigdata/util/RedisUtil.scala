@@ -1,30 +1,43 @@
 package com.bl.bigdata.util
 
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig
+import org.apache.spark.SparkConf
+import org.apache.spark.mllib.recommendation.Rating
 import redis.clients.jedis.{JedisPoolConfig, JedisPool}
 
 /**
   * Created by MK33 on 2016/3/8.
   */
-object RedisUtil extends Serializable {
-  val redisHost = "10.201.128.126"
-  val redisPort = 6379
-  val redisTimeout = 30000
-  lazy val pool = new JedisPool(new GenericObjectPoolConfig, redisHost, redisPort, redisTimeout)
+object RedisUtil extends RedisBase with Serializable {
+    //Constant value
+    val MEMBER_COOKIE = "member_cookie_"
+    val REDIS_PREFIX="rcmd_gwyl_"
 
 
-  lazy val hook = new Thread{
-    override def run = {
-      println("Execute hook thread: " + this)
-      pool.destroy()
+    def guessWhatYouLike_saveToRedis(sparkConf: SparkConf ,jedisPool: JedisPool, values: Map[String, Array[Rating]]): Unit = {
+        connect(sparkConf)
+        val jedis = jedisPool.getResource
+        import com.bl.bigdata.util.Implicts.map2HashMap
+        values.map{v =>
+            val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
+            if(map.nonEmpty) {
+                jedis.hmset(REDIS_PREFIX + v._1.toString, map)
+            }
+        }
+        println("finished saving data to redis")
     }
-  }
 
-  sys.addShutdownHook(hook.run)
+    def saveToRedis(sparkConf: SparkConf, jedisPool: JedisPool, values: Map[String, String]): Unit = {
+        connect(sparkConf)
+        val jedis = jedisPool.getResource
+        values.map{
+            v =>
+                println(v)
+                jedis.set(MEMBER_COOKIE + v._1, v._2)
+        }
+    }
 
-
-  def getJedisPool = {
-    new JedisPool(new JedisPoolConfig, "10.201.128.216") with Serializable
-  }
+    def getJedisPool = {
+        new JedisPool(new JedisPoolConfig, "10.201.128.216") with Serializable
+    }
 }
 

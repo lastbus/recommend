@@ -1,4 +1,4 @@
-package bl.testing
+package bl.testing.mess
 
 import org.junit._
 import Assert._
