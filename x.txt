@@ -1,42 +1,0 @@
-[INFO] Scanning for projects...
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-antrun-plugin/1.3/maven-antrun-plugin-1.3.pom
-1/5 KB   5/5 KB            Downloaded: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-antrun-plugin/1.3/maven-antrun-plugin-1.3.pom (5 KB at 0.9 KB/sec)
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-plugins/12/maven-plugins-12.pom
-2/12 KB   6/12 KB   7/12 KB   8/12 KB   10/12 KB   11/12 KB   12/12 KB              Downloaded: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-plugins/12/maven-plugins-12.pom (12 KB at 56.2 KB/sec)
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-antrun-plugin/1.3/maven-antrun-plugin-1.3.jar
-4/24 KB    6/24 KB   7/24 KB   8/24 KB   10/24 KB   11/24 KB   12/24 KB   14/24 KB   15/24 KB   16/24 KB   18/24 KB   20/24 KB   22/24 KB   23/24 KB   24/24 KB              Downloaded: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-antrun-plugin/1.3/maven-antrun-plugin-1.3.jar (24 KB at 140.4 KB/sec)
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-assembly-plugin/2.2-beta-5/maven-assembly-plugin-2.2-beta-5.pom
-4/15 KB    6/15 KB   7/15 KB   8/15 KB   10/15 KB   11/15 KB   14/15 KB   15/15 KB              Downloaded: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-assembly-plugin/2.2-beta-5/maven-assembly-plugin-2.2-beta-5.pom (15 KB at 65.8 KB/sec)
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-assembly-plugin/2.2-beta-5/maven-assembly-plugin-2.2-beta-5.jar
-           Downloading: http://scala-tools.org/repo-releases/org/apache/maven/plugins/maven-assembly-plugin/2.2-beta-5/maven-assembly-plugin-2.2-beta-5.jar
-           Downloading: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-assembly-plugin/2.2-beta-5/maven-assembly-plugin-2.2-beta-5.jar
-4/204 KB   8/204 KB   12/204 KB   16/204 KB   20/204 KB   24/204 KB   28/204 KB   32/204 KB   36/204 KB   40/204 KB   44/204 KB   48/204 KB   52/204 KB   56/204 KB   60/204 KB   64/204 KB   68/204 KB   72/204 KB   76/204 KB   80/204 KB   84/204 KB   88/204 KB   92/204 KB   96/204 KB   100/204 KB   104/204 KB   108/204 KB   112/204 KB   116/204 KB   120/204 KB   124/204 KB   128/204 KB   132/204 KB   136/204 KB   140/204 KB   144/204 KB   148/204 KB   152/204 KB   156/204 KB   160/204 KB   164/204 KB   168/204 KB   172/204 KB   176/204 KB   180/204 KB   184/204 KB   188/204 KB   192/204 KB   196/204 KB   200/204 KB   204/204 KB   204/204 KB                Downloaded: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-assembly-plugin/2.2-beta-5/maven-assembly-plugin-2.2-beta-5.jar (204 KB at 50.2 KB/sec)
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-dependency-plugin/2.8/maven-dependency-plugin-2.8.pom
-4/12 KB      8/12 KB   11/12 KB   12/12 KB              Downloaded: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-dependency-plugin/2.8/maven-dependency-plugin-2.8.pom (12 KB at 6.7 KB/sec)
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-dependency-plugin/2.8/maven-dependency-plugin-2.8.jar
-2/150 KB   4/150 KB   6/150 KB   7/150 KB   8/150 KB   10/150 KB   11/150 KB   12/150 KB   14/150 KB   15/150 KB   16/150 KB   18/150 KB   19/150 KB   20/150 KB   22/150 KB   23/150 KB   24/150 KB   26/150 KB   27/150 KB   28/150 KB   30/150 KB   31/150 KB   32/150 KB   34/150 KB   35/150 KB   37/150 KB   38/150 KB   40/150 KB   41/150 KB   42/150 KB   44/150 KB   45/150 KB   47/150 KB   48/150 KB   50/150 KB   51/150 KB   52/150 KB   54/150 KB   55/150 KB   57/150 KB   58/150 KB   60/150 KB   61/150 KB   62/150 KB   64/150 KB   65/150 KB   67/150 KB   68/150 KB   70/150 KB   71/150 KB   72/150 KB   74/150 KB   75/150 KB   77/150 KB   78/150 KB   80/150 KB   81/150 KB   82/150 KB   84/150 KB   85/150 KB   87/150 KB   88/150 KB   90/150 KB   91/150 KB   92/150 KB   94/150 KB   95/150 KB   97/150 KB   98/150 KB   100/150 KB   101/150 KB   102/150 KB   104/150 KB   105/150 KB   108/150 KB   109/150 KB   111/150 KB   112/150 KB   114/150 KB   115/150 KB   116/150 KB   118/150 KB   119/150 KB   120/150 KB   122/150 KB   123/150 KB   124/150 KB   127/150 KB   128/150 KB   130/150 KB   131/150 KB   134/150 KB   135/150 KB   136/150 KB   138/150 KB   139/150 KB   142/150 KB   143/150 KB   145/150 KB   146/150 KB   149/150 KB   150/150 KB                Downloaded: http://maven.oschina.net/content/groups/public/org/apache/maven/plugins/maven-dependency-plugin/2.8/maven-dependency-plugin-2.8.jar (150 KB at 259.7 KB/sec)
-[INFO]                                                                         
-[INFO] ------------------------------------------------------------------------
-[INFO] Building recommend 1.0-SNAPSHOT
-[INFO] ------------------------------------------------------------------------
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/hadoop/hadoop-core/2.6.0/hadoop-core-2.6.0.pom
-             Downloading: http://scala-tools.org/repo-releases/org/apache/hadoop/hadoop-core/2.6.0/hadoop-core-2.6.0.pom
-             Downloading: https://repo.maven.apache.org/maven2/org/apache/hadoop/hadoop-core/2.6.0/hadoop-core-2.6.0.pom
-             [WARNING] The POM for org.apache.hadoop:hadoop-core:jar:2.6.0 is missing, no dependency information available
-Downloading: http://maven.oschina.net/content/groups/public/org/apache/hadoop/hadoop-core/2.6.0/hadoop-core-2.6.0.jar
-             Downloading: http://scala-tools.org/repo-releases/org/apache/hadoop/hadoop-core/2.6.0/hadoop-core-2.6.0.jar
-             Downloading: https://repo.maven.apache.org/maven2/org/apache/hadoop/hadoop-core/2.6.0/hadoop-core-2.6.0.jar
-             [INFO] ------------------------------------------------------------------------
-[INFO] BUILD FAILURE
-[INFO] ------------------------------------------------------------------------
-[INFO] Total time: 18.930 s
-[INFO] Finished at: 2016-03-25T14:01:29+08:00
-[INFO] Final Memory: 18M/236M
-[INFO] ------------------------------------------------------------------------
-[ERROR] Failed to execute goal on project recommend: Could not resolve dependencies for project com.bl.bigdata:recommend:jar:1.0-SNAPSHOT: Could not find artifact org.apache.hadoop:hadoop-core:jar:2.6.0 in nexus (http://maven.oschina.net/content/groups/public/) -> [Help 1]
-[ERROR] 
-[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
-[ERROR] Re-run Maven using the -X switch to enable full debug logging.
-[ERROR] 
-[ERROR] For more information about the errors and possible solutions, please read the following articles:
-[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/DependencyResolutionException

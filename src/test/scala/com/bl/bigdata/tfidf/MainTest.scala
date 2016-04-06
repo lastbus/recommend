@@ -1,6 +1,6 @@
 package com.bl.bigdata.tfidf
 
-import org.apache.spark.mllib.linalg.{DenseVector, SparseVector}
+import org.apache.spark.mllib.linalg.SparseVector
 import org.junit._
 
 /**

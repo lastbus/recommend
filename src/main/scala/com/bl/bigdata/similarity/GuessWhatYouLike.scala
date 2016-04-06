@@ -38,7 +38,7 @@ class GuessWhatYouLike extends Tool {
     val conf = new SparkConf()
       .setAppName("GuessWhatYouLike")
       .set("spark.executor.memory", "5g")
-      .setMaster("local[*]") //only for local test
+      //.setMaster("local[*]") //only for local test
     val sc = new SparkContext(conf)
     val ratingsFilePath = args(0).trim
     val ratingsCache =sc.textFile(ratingsFilePath).map { line =>
