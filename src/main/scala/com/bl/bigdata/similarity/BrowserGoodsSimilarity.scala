@@ -17,9 +17,9 @@ class BrowserGoodsSimilarity extends Tool {
 
   private val message = new StringBuilder
 
-   val isEmpty =  (temp: String) => {
-    if(temp.trim.length == 0) true
-    else if(temp.equalsIgnoreCase("NULL")) true
+  val isEmpty = (temp: String) => {
+    if (temp.trim.length == 0) true
+    else if (temp.equalsIgnoreCase("NULL")) true
     else false
   }
 
@@ -32,7 +32,7 @@ class BrowserGoodsSimilarity extends Tool {
     val redis = output.contains("redis")
 
     val sparkConf = new SparkConf().setAppName("看了又看")
-    if(local) sparkConf.setMaster("local[*]")
+    if (local) sparkConf.setMaster("local[*]")
     if (redis)
       for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
         sparkConf.set(k, v)
@@ -55,23 +55,25 @@ class BrowserGoodsSimilarity extends Tool {
       }.distinct
       .filter(v => {
         val temp = v._1._2
-        if(temp.trim.length == 0) false
-        else if(temp.equalsIgnoreCase("NULL")) false
+        if (temp.trim.length == 0) false
+        else if (temp.equalsIgnoreCase("NULL")) false
         else true
       })
     // 将用户看过的商品两两结合在一起
-    val tuple = rawRdd.join(rawRdd).filter{ case (k, (v1, v2)) => v1 != v2}
-      .map{ case (k, (goodId1, goodId2)) => (goodId1, goodId2)}
+    val tuple = rawRdd.join(rawRdd).filter { case (k, (v1, v2)) => v1 != v2 }
+      .map { case (k, (goodId1, goodId2)) => (goodId1, goodId2) }
     // 计算浏览商品 (A,B) 的次数
     val tupleFreq = tuple.map((_, 1)).reduceByKey(_ + _)
     // 计算浏览每种商品的次数
     val good2Freq = rawRdd.map(_._2).map((_, 1)).reduceByKey(_ + _)
-    val good1Good2Similarity = tupleFreq.map{ case ((good1, good2), freq) => (good2, (good1, freq))}
+    val good1Good2Similarity = tupleFreq.map { case ((good1, good2), freq) => (good2, (good1, freq)) }
       .join(good2Freq)
-      .map{ case (good2, ((good1, freq), good2Freq)) =>  (good1, Seq((good2, freq.toDouble / good2Freq)))}
-      .reduceByKey((s1, s2) =>{accumulator += 1; s1 ++ s2})
+      .map { case (good2, ((good1, freq), good2Freq)) => (good1, Seq((good2, freq.toDouble / good2Freq))) }
+      .reduceByKey((s1, s2) => {
+        accumulator += 1; s1 ++ s2
+      })
       .mapValues(v => v.sortWith(_._2 > _._2).take(20))
-      .map{ case (goods1, goods2) => ("rcmd_view_" + goods1, goods2.map(_._1).mkString("#"))}
+      .map { case (goods1, goods2) => ("rcmd_view_" + goods1, goods2.map(_._1).mkString("#")) }
     // 保存到 redis 中
     if (redis) {
       sc.toRedisKV(good1Good2Similarity)
@@ -86,10 +88,10 @@ class BrowserGoodsSimilarity extends Tool {
 object BrowserGoodsSimilarity {
 
   def main(args: Array[String]) {
-    val goodsSimilarity = new BrowserGoodsSimilarity with ToolRunner
-    goodsSimilarity.run(args)
-    MailServer.send(goodsSimilarity.message.toString())
-//    execute(args)
+//    val goodsSimilarity = new BrowserGoodsSimilarity with ToolRunner
+//    goodsSimilarity.run(args)
+//    MailServer.send(goodsSimilarity.message.toString())
+        execute(args)
   }
 
   def execute(args: Array[String]) = {

@@ -13,17 +13,7 @@ object ConfigurationBL extends ConfigurableBL {
 
   private val logger = LogManager.getLogger(this.getClass)
   private val setting = new ConcurrentHashMap[String, String]
-
-  /** 解析配置文件 */
-  def parseConfFile(file: String): Unit = {
-//    val kV = addResource(file)
-//    if (!kV.isEmpty)
-//      for ((key, value) <- kV) {
-//        if(setting.containsKey(key))
-//          logger.warn(s"$key's origin value ${setting.get(key)} is overriding by $value.")
-//        setting.put(key, value)
-//      }
-  }
+  
 
   /** Get a parameter as an Option */
   def getOption(key: String): Option[String] = {
