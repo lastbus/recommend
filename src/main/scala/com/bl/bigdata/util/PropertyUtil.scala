@@ -10,9 +10,9 @@ import scala.io.Source
 object PropertyUtil {
 
   private val logger = LogManager.getLogger(this.getClass)
-  private val CONFIG = "/home/blemall/workspace/config.properties"
+  private val DEFAULT_CONFIG_FILE = "/home/blemall/workspace/recommend-mk/config.properties"
   def get(key: String): String = {
-      val properties = loadProperties(CONFIG)
+      val properties = loadProperties(DEFAULT_CONFIG_FILE)
       if (properties == null || properties.isEmpty)
         null
       else
