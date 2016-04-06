@@ -12,9 +12,10 @@ object HiveDataSource extends DataSource{
         sparkConf.set("log.level", "WARN")
         val sc = new SparkContext(sparkConf)
         //val sqlContext = new SQLContext(sc)
-        val hiveContext = new org.apache.spark.sql.hive.HiveContext(sc)
-        val f = hiveContext.sql("select * from recommendation.product_properties_raw_data")
-        f
+//        val hiveContext = new org.apache.spark.sql.hive.HiveContext(sc)
+//        val f = hiveContext.sql("select * from recommendation.product_properties_raw_data")
+//        f
+        null
     }
     def main (args: Array[String]) {
         val f = read()

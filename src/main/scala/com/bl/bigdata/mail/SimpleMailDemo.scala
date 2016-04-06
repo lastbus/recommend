@@ -9,7 +9,8 @@ object SimpleMailDemo {
 
   def main(args: Array[String]) {
 //    MailServer.send("test")
-    blMail
+//    blMail
+    demo
   }
 
   def demo: Unit = {

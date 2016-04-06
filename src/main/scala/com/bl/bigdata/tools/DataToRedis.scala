@@ -1,8 +1,7 @@
 package com.bl.bigdata.tools
 
-import com.bl.bigdata.util.RedisUtil._
 import org.apache.spark.{SparkContext, SparkConf}
-import redis.clients.jedis.JedisPool
+import redis.clients.jedis.{JedisPoolConfig, Protocol, JedisPool}
 
 /**
   * Created by blemall on 3/30/16.
@@ -34,5 +33,9 @@ object DataToRedis {
                 jedis.set(MEMBER_COOKIE + v._1, v._2)
         }
 
+    }
+
+    def getJedisPool = {
+        new JedisPool(new JedisPoolConfig, "", 6379, Protocol.DEFAULT_TIMEOUT, "") with Serializable
     }
 }

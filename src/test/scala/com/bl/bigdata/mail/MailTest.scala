@@ -10,8 +10,8 @@ class MailTest {
 
   @Test
   def test = {
-    MailServer.send("test method: send(msg: String)")
+//    MailServer.send("test method: send(msg: String)")
     val msg = Array("array0", "array1", "array2")
-    MailServer.send(msg)
+//    MailServer.send(msg)
   }
 }

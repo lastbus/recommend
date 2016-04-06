@@ -5,6 +5,10 @@
         <value>D:\2\user_behavior_raw_data</value>
     </property>
     <property>
+        <name>day.before.today</name>
+        <value>90</value>
+    </property>
+    <property>
         <name>goods.for.sale.input.path</name>
         <value>D:\2016-03-21\goods_avaialbe_for_sale(1)</value>
     </property>
@@ -111,11 +115,6 @@
         <name>browser.output</name>
         <value>local:re0dis</value>
     </property>
-    <property>
-        <name>browser.app.name</name>
-        <value>browser not buy</value>
-    </property>
-
 
     <property>
         <name>redis.host</name>

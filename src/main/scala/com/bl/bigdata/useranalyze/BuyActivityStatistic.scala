@@ -1,7 +1,7 @@
 package com.bl.bigdata.useranalyze
 
 import com.bl.bigdata.mail.MailServer
-import com.bl.bigdata.util.{ConfigurationBL, Tool, ToolRunner}
+import com.bl.bigdata.util.{HiveDataUtil, ConfigurationBL, Tool, ToolRunner}
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkConf, SparkContext}
 import redis.clients.jedis.Jedis
@@ -38,7 +38,7 @@ class BuyActivityStatistic extends Tool {
 
     val sc = new SparkContext(sparkConf)
 
-    val rawRDD = sc.textFile(inputPath).map(line => {
+    val rawRDD = HiveDataUtil.read(inputPath, sc).map(line => {
       val attr = line.split("\t")
       // 类目  时间  行为编码 价格
       (attr(9),attr(6).substring(attr(6).indexOf(" ") + 1), attr(7))

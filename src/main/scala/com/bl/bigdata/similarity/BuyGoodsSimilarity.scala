@@ -1,7 +1,7 @@
 package com.bl.bigdata.similarity
 
 import com.bl.bigdata.mail.MailServer
-import com.bl.bigdata.util.{ToolRunner, Tool, ConfigurationBL}
+import com.bl.bigdata.util.{HiveDataUtil, ToolRunner, Tool, ConfigurationBL}
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkContext, SparkConf}
 import com.redislabs.provider.redis._
@@ -37,7 +37,7 @@ class BuyGoodsSimilarity extends Tool{
     val sc = new SparkContext(sparkConf)
     val accumulator = sc.accumulator(0)
 
-    val buyGoodsRDD = sc.textFile(inputPath)
+    val buyGoodsRDD = HiveDataUtil.read(inputPath, sc)
       // 提取的字段: 商品类别,cookie,日期,用户行为编码,商品id
       .map( line => {
       //cookie ID, member id, session id, goods id, goods name, quality,

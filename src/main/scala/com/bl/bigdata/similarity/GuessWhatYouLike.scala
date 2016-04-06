@@ -8,8 +8,7 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rating}
 import org.apache.spark.rdd._
 import org.apache.spark.{SparkConf, SparkContext}
-import redis.clients.jedis.JedisPool
-import com.bl.bigdata.util.RedisUtil._
+import redis.clients.jedis.{JedisPoolConfig, Protocol, JedisPool}
 
 /**
  * Created by blemall on 3/23/16.
@@ -116,6 +115,10 @@ class GuessWhatYouLike extends Tool {
     val d = dateFormat.parse(day)
     val n = this.effectiveDay - (now - d.getTime)/(24 * 60 * 60 * 1000)
     if (n == 0 || n < 0 ) 1.0 else math.pow(attenuationRatio, n)
+  }
+
+  def getJedisPool = {
+    new JedisPool(new JedisPoolConfig, "", 6379, Protocol.DEFAULT_TIMEOUT, "") with Serializable
   }
 }
 

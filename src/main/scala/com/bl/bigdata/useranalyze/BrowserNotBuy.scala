@@ -1,7 +1,7 @@
 package com.bl.bigdata.useranalyze
 
 import com.bl.bigdata.mail.MailServer
-import com.bl.bigdata.util.{Tool, ToolRunner, ConfigurationBL}
+import com.bl.bigdata.util.{HiveDataUtil, Tool, ToolRunner, ConfigurationBL}
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkContext, SparkConf}
 import com.redislabs.provider.redis._
@@ -32,7 +32,7 @@ class BrowserNotBuy extends Tool {
     val sc = new SparkContext(sparkConf)
     val accumulator = sc.accumulator(0)
 
-    val a = sc.textFile(input)
+    val a = HiveDataUtil.read(input, sc)
       // 提取的字段: 商品类别,cookie,日期,用户行为编码,商品id
       .map( line => {
       //cookie ID, member id, session id, goods id, goods name, quality,
