@@ -1,6 +1,7 @@
 package com.bl.bigdata.similarity
 
-import com.bl.bigdata.util.{ToolRunner, Tool}
+import com.bl.bigdata.mail.MailServer
+import com.bl.bigdata.util.{ConfigurationBL, ToolRunner, Tool}
 import org.apache.spark.{SparkConf, SparkContext}
 import com.redislabs.provider.redis._
 
@@ -12,29 +13,31 @@ import com.redislabs.provider.redis._
   * r(B,A) = N(A,B) / N(A)
   * Created by MK33 on 2016/3/14.
   */
-class GoodsSimilarity extends Tool {
+class BrowserGoodsSimilarity extends Tool {
 
-  def isEmpty(s: String): Boolean = {
-    if(s.trim.length == 0) true
-    else if(s.equalsIgnoreCase("NULL")) true
+  private val message = new StringBuilder
+
+   val isEmpty =  (temp: String) => {
+    if(temp.trim.length == 0) true
+    else if(temp.equalsIgnoreCase("NULL")) true
     else false
   }
 
   override def run(args: Array[String]): Unit = {
-    if(args.length < 2) {
-      println("There are at least 2 parameters: <input path> and <save path>.")
-      sys.exit(-1)
-    }
-    val inputPath = args(0).trim
-    val savePath = args(1).trim
+    message.clear()
+    message.append("看了又看:\n")
+    val inputPath = ConfigurationBL.get("user.behavior.raw.data")
+    val output = ConfigurationBL.get("recmd.output")
+    val local = output.contains("local")
+    val redis = output.contains("redis")
 
-    val sparkConf = new SparkConf().setAppName("look and look")
-    if(!inputPath.startsWith("/")) sparkConf.setMaster("local[*]")
-    sparkConf.set("redis.host", "10.201.128.216")
-    sparkConf.set("redis.port", "6379")
-    sparkConf.set("redis.timeout", "10000")
-
+    val sparkConf = new SparkConf().setAppName("看了又看")
+    if(local) sparkConf.setMaster("local[*]")
+    if (redis)
+      for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
+        sparkConf.set(k, v)
     val sc = new SparkContext(sparkConf)
+    val accumulator = sc.accumulator(0)
 
     val rawRdd = sc.textFile(inputPath)
       // 提取需要的字段
@@ -49,38 +52,49 @@ class GoodsSimilarity extends Tool {
       .filter{ case (cookie, category, date, behaviorId, goodsId) => behaviorId == "1000"}
       .map{ case (cookie, category, date, behaviorId, goodsId) =>
         ((cookie, category, date), goodsId)
-      }.distinct.filter(v => !isEmpty(v._1._2))
-
-    //    rawRdd.filter(_._2 == "159431").collect().foreach(println)
-
+      }.distinct
+      .filter(v => {
+        val temp = v._1._2
+        if(temp.trim.length == 0) false
+        else if(temp.equalsIgnoreCase("NULL")) false
+        else true
+      })
     // 将用户看过的商品两两结合在一起
     val tuple = rawRdd.join(rawRdd).filter{ case (k, (v1, v2)) => v1 != v2}
       .map{ case (k, (goodId1, goodId2)) => (goodId1, goodId2)}
-
-
     // 计算浏览商品 (A,B) 的次数
     val tupleFreq = tuple.map((_, 1)).reduceByKey(_ + _)
     // 计算浏览每种商品的次数
     val good2Freq = rawRdd.map(_._2).map((_, 1)).reduceByKey(_ + _)
-
     val good1Good2Similarity = tupleFreq.map{ case ((good1, good2), freq) => (good2, (good1, freq))}
       .join(good2Freq)
       .map{ case (good2, ((good1, freq), good2Freq)) =>  (good1, Seq((good2, freq.toDouble / good2Freq)))}
-      .reduceByKey(_ ++ _)
+      .reduceByKey((s1, s2) =>{accumulator += 1; s1 ++ s2})
       .mapValues(v => v.sortWith(_._2 > _._2).take(20))
       .map{ case (goods1, goods2) => ("rcmd_view_" + goods1, goods2.map(_._1).mkString("#"))}
-
     // 保存到 redis 中
-    sc.toRedisKV(good1Good2Similarity)
-
+    if (redis) {
+      sc.toRedisKV(good1Good2Similarity)
+      message.append(s"插入 rcmd_view_*: $accumulator")
+    }
+    if (local) good1Good2Similarity take (50) foreach println
     sc.stop()
 
   }
 }
 
-object GoodsSimilarity {
+object BrowserGoodsSimilarity {
 
   def main(args: Array[String]) {
-    (new GoodsSimilarity with ToolRunner).run(args)
+    val goodsSimilarity = new BrowserGoodsSimilarity with ToolRunner
+    goodsSimilarity.run(args)
+    MailServer.send(goodsSimilarity.message.toString())
+//    execute(args)
+  }
+
+  def execute(args: Array[String]) = {
+    val goodsSimilarity = new BrowserGoodsSimilarity with ToolRunner
+    goodsSimilarity.run(args)
+    MailServer.send(goodsSimilarity.message.toString())
   }
 }

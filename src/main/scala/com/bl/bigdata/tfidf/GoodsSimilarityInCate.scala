@@ -1,6 +1,6 @@
 package com.bl.bigdata.tfidf
 
-import com.bl.bigdata.util.{Tool, ToolRunner}
+import com.bl.bigdata.util.{ConfigurationBL, Tool, ToolRunner}
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.{Put, Result}
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
@@ -28,26 +28,28 @@ import scala.collection.mutable
   *
   * Created by MK33 on 2016/3/9.
   */
-class GoodsSimilarityInCate extends Tool {
+class GoodsSimilarityInCate extends Tool with Serializable {
 
   val featuresNum = 1 << 16
 
   override def run(args: Array[String]): Unit = {
 
-    if (args.length < 4) {
-      println("Please input <input path>,<hBase table name>,<table column Family> and <table column name>.")
-      sys.exit(-1)
-    }
-    val inputPath = args(0)
-    val table = args(1)
-    val columnFamily = args(2)
-    val columnName = args(3)
-    val delimiter = "\t"
-    val sparkConf = new SparkConf().setAppName(this.getClass.getName)
-    sparkConf.set("redis.host", "10.201.128.216")
-    sparkConf.set("redis.timeout", "10000")
+    val inputPath = ConfigurationBL.get("product.properties.raw.data")
+    val output = ConfigurationBL.get("recmd.output")
+    val local = output.contains("local")
+    val redis = output.contains("redis")
+    val hbase = output.contains("hbase")
 
-    if (!inputPath.startsWith("/")) sparkConf.setMaster("local[*]")
+    val table = ""
+    val columnFamily = ""
+    val columnName = ""
+    val delimiter = "\t"
+
+    val sparkConf = new SparkConf().setAppName(this.getClass.getName)
+    if (local) sparkConf.setMaster("local[*]")
+    if (redis)
+      for ((k, v) <- ConfigurationBL.getAll)
+        sparkConf.set(k, v)
     val sc = new SparkContext(sparkConf)
 
     val rawRDD = sc.textFile(inputPath)
@@ -116,10 +118,9 @@ class GoodsSimilarityInCate extends Tool {
       .reduceByKey((s1, s2) => s1 ++ s2)
       .map { case (id1, seq) => ("rcmd_sim_" + id1, seq.sortWith((seq1, seq2) => seq1._2 > seq2._2).take(20).map(_._1).mkString("#"))}
 
-    sc.toRedisKV(similarity)
+    if (redis) sc.toRedisKV(similarity)
 
-    similarity.collect{ case (a, b) => a.equals("0")}
-    if (inputPath.startsWith("/")) {
+    if (hbase) {
       // save to hbase
       val hBaseConf = HBaseConfiguration.create()
       hBaseConf.set("hbase.zookeeper.property.clientPort", "2181")
@@ -158,7 +159,6 @@ class GoodsSimilarityInCate extends Tool {
       termFrequency(featuresNum) = (priceArray.size + 1) / 2
     else {
       var i = priceArray.size
-
       while (i > 0 && termFrequency.isEmpty) {
         // 0%-20%: 1, 20%-40%: 2, 40%-60%: 3, 60%-80%: 4, 80%- : 5
         if (price.toDouble >= priceArray(i - 1)) termFrequency(featuresNum) = i
@@ -181,8 +181,9 @@ class GoodsSimilarityInCate extends Tool {
 
 }
 
-object GoodsSimilarityInCate {
+object GoodsSimilarityInCate extends Serializable {
   def main(args: Array[String]) {
-    (new GoodsSimilarityInCate with ToolRunner).run(args)
+    ConfigurationBL.addResource("recmd-conf.xml")
+    (new GoodsSimilarityInCate).run(args)
   }
 }

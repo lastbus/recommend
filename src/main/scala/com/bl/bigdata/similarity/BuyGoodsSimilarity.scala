@@ -1,5 +1,6 @@
 package com.bl.bigdata.similarity
 
+import com.bl.bigdata.mail.MailServer
 import com.bl.bigdata.util.{ToolRunner, Tool, ConfigurationBL}
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.{SparkContext, SparkConf}
@@ -14,18 +15,19 @@ import com.redislabs.provider.redis._
 class BuyGoodsSimilarity extends Tool{
 
   private val logger = LogManager.getLogger(this.getClass.getName)
+  private val message = new StringBuilder
 
   override def run(args: Array[String]): Unit = {
     logger.info("starting to calculator buy goods similarity.")
+    message.append("买了还买:\n")
 
-    val similarityConf = ConfigurationBL.parseConfFile("buy-similarity.xml")
-    val inputPath = ConfigurationBL.get("buy.similarity.input.path")
-    val inputPath2 = ConfigurationBL.get("buy.similarity.input.category")
-    val outPath = ConfigurationBL.get("buy.similarity.output")
+    val inputPath = ConfigurationBL.get("user.behavior.raw.data")
+    val inputPath2 = ConfigurationBL.get("dim.category")
+    val outPath = ConfigurationBL.get("recmd.output")
     val redis = outPath.contains("redis")
     val local = outPath.contains("local")
 
-    val sparkConf = new SparkConf().setAppName(this.getClass.getName)
+    val sparkConf = new SparkConf().setAppName("买了还买")
     // 如果在本地测试，将 master 设置为 local 模式
     if (local) sparkConf.setMaster("local[*]")
     if (redis) {
@@ -33,6 +35,7 @@ class BuyGoodsSimilarity extends Tool{
         sparkConf.set(key, value)
     }
     val sc = new SparkContext(sparkConf)
+    val accumulator = sc.accumulator(0)
 
     val buyGoodsRDD = sc.textFile(inputPath)
       // 提取的字段: 商品类别,cookie,日期,用户行为编码,商品id
@@ -52,7 +55,7 @@ class BuyGoodsSimilarity extends Tool{
       .map( line => {
       val w = line.split("\t")
       // 商品的末级目录，一级目录
-      (w(0), w(1))
+      (w(0), w(w.length - 4))
     }).distinct
 
     val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)
@@ -69,12 +72,13 @@ class BuyGoodsSimilarity extends Tool{
       .join(buyCount)
       .map{ case (goodsID2, ((goodsID1, count), goodsID2Count)) => (goodsID1, goodsID2, count.toDouble / goodsID2Count)}
     val sorting = result.map{ case (goodsID1, goodsID2, similarity) => (goodsID1, Seq((goodsID2, similarity)))}
-      .reduceByKey(_ ++ _).mapValues(seq => seq.sortWith(_._2 > _._2).map(_._1).mkString("#"))
+      .reduceByKey((s1,s2) => {accumulator += 1; s1 ++ s2}).mapValues(seq => seq.sortWith(_._2 > _._2).map(_._1).mkString("#"))
 
     if (redis) {
       logger.info(s"output result to redis, host: ${ConfigurationBL.get("redis.host")}.")
       sc.toRedisKV(sorting.map(s => ("rcmd_bab_goods_" + s._1, s._2)))
       logger.info("finished to output to redis.")
+      message.append(s"插入 rcmd_bab_goods_*: $accumulator.")
     }
     if (local) {
       logger.info("begin to output result to local redis.")
@@ -82,14 +86,19 @@ class BuyGoodsSimilarity extends Tool{
       result.take(50).foreach(println)
       logger.info("finished to output result to local redis.")
     }
-
     sc.stop()
-
   }
 }
 
 object BuyGoodsSimilarity {
+
   def main(args: Array[String]) {
-    (new BuyGoodsSimilarity with ToolRunner).run(args)
+   execute(args)
+  }
+
+  def execute(args: Array[String]): Unit ={
+    val buyGoodsSimilarity = new BuyGoodsSimilarity with ToolRunner
+    buyGoodsSimilarity.run(args)
+    MailServer.send(buyGoodsSimilarity.message.toString())
   }
 }
