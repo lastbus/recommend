@@ -9,6 +9,22 @@ import org.apache.spark.{SparkContext, SparkConf}
 trait SparkEnv {
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
-    val sparkConf = new SparkConf()
-    val sc = new SparkContext(sparkConf)
+    private var sparkConf: SparkConf = null
+    private var sc: SparkContext = null
+
+    protected def getSparkConf(): SparkConf = {
+        if (sparkConf == null){
+            sparkConf = new SparkConf()
+        }
+
+        sparkConf
+    }
+
+    protected def getSparkContext(): SparkContext = {
+        if(sc == null){
+            sc = new SparkContext()
+        }
+
+        sc
+    }
 }

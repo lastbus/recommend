@@ -1,16 +1,13 @@
 package com.bl.bigdata.util
 
 import java.util.Properties
-import org.apache.logging.log4j.LogManager
 import scala.io.Source
 
 /**
  * Created by blemall on 3/25/16.
  */
 object PropertyUtil {
-
-  private val logger = LogManager.getLogger(this.getClass)
-  private val DEFAULT_CONFIG_FILE = "/home/blemall/workspace/recommend-mk/config.properties"
+  private val DEFAULT_CONFIG_FILE = "/home/hdfs/config.properties"
   def get(key: String): String = {
       val properties = loadProperties(DEFAULT_CONFIG_FILE)
       if (properties == null || properties.isEmpty)
@@ -29,8 +26,7 @@ object PropertyUtil {
         properties.load(reader)
       }
     } catch {
-      case e: Exception => logger.info(e.getLocalizedMessage)
-                           None
+      case e: Exception => None
     }
 
     properties

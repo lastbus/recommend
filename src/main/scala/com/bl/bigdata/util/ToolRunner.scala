@@ -20,6 +20,7 @@ trait ToolRunner extends Tool {
       super.run(args)
     } catch {
       case e: Exception =>
+        println(e.getLocalizedMessage)
         logger.info(s"encounter error, program exit: ${e.getMessage()}")
     }
     val end = new Date
