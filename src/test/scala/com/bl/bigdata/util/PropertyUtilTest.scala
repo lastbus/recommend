@@ -9,8 +9,10 @@ class PropertyUtilTest {
 
     @Test
     def testPropertyUtil = {
-        val b = PropertyUtil.get("gueswhatyoulike.attenuation.ratio")
-//        assert(b == 0.95)
+
+        val b = PropertyUtil.get("guesswhatyoulike.attenuation.ratio")
+        assert(0.95 == b.toDouble)
+
     }
 
     @Test

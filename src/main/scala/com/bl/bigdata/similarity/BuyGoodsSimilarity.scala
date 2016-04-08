@@ -1,9 +1,14 @@
 package com.bl.bigdata.similarity
 
-import com.bl.bigdata.mail.MailServer
-import com.bl.bigdata.util.{HiveDataUtil, ToolRunner, Tool, ConfigurationBL}
+import java.text.SimpleDateFormat
+import java.util.Date
+
+import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.util._
 import org.apache.logging.log4j.LogManager
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.{Accumulator, SparkContext, SparkConf}
 import com.redislabs.provider.redis._
 /**
   * 计算用户购买的物品在一级类目下的关联度。
@@ -36,49 +41,58 @@ class BuyGoodsSimilarity extends Tool{
     }
     val sc = new SparkContext(sparkConf)
     val accumulator = sc.accumulator(0)
+    val accumulator2 = sc.accumulator(0)
 
-    val buyGoodsRDD = HiveDataUtil.read(inputPath, sc)
-      // 提取的字段: 商品类别,cookie,日期,用户行为编码,商品id
-      .map( line => {
-      //cookie ID, member id, session id, goods id, goods name, quality,
-      // event data, behavior code, channel, category sid, dt
-      val w = line.split("\t")
-      // 商品类别,cookie,日期,用户行为编码,商品id
-      (w(9), (w(0), w(6).substring(0, w(6).indexOf(" ")), w(7), w(3)))
-    })
-      // 提取购买的物品
+    val limit = ConfigurationBL.get("day.before.today", "90").toInt
+    val sdf = new SimpleDateFormat("yyyyMMdd")
+    val date = new Date
+    val start = sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
+    val sql = "select category_sid, cookie_id, event_date, behavior_type, goods_sid from recommendation.user_behavior_raw_data  " +
+      s"where dt >= $start"
+
+    val hiveContext = new HiveContext(sc)
+    val buyGoodsRDD = hiveContext.sql(sql).rdd
+      .map(row => (row.getString(0), (row.getString(1), { val t = row.getString(2); t.substring(0, t.indexOf(" "))},
+        row.getString(3), row.getString(4))))
       .filter{ case (category, (cookie, date, behaviorID, goodsID)) => behaviorID.equals("4000")}
       .map{case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID))}.distinct
 
-    val categoriesRDD = sc.textFile(inputPath2)
-      // 提取字段
-      .map( line => {
-      val w = line.split("\t")
-      // 商品的末级目录，一级目录
-      (w(0), w(w.length - 4))
-    }).distinct
+    val sql2 = "select category_id, level2_id from recommendation.dim_category"
+    val categoriesRDD = hiveContext.sql(sql2).rdd.map(row => (row.getLong(0), row.getLong(1))).
+      distinct().
+      map(s => (s._1.toString, s._2.toString))
+//    val categoriesRDD = sc.textFile(inputPath2)
+//      // 提取字段
+//      .map( line => {
+//      val w = line.split("\t")
+//      // 商品的末级目录，一级目录
+//      (w(0), w(w.length - 4))
+//    }).distinct
 
     val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)
       // 将商品的末级类别用一级类别替换
       .map{ case (category, ((cookie, date, goodsID), kind)) => ((cookie, date, kind), goodsID)}
     // 统计每种物品的购买数量
     val buyCount = buyGoodsKindRDD.map{ case ((cookie, date, kind), goodsID) => (goodsID, 1)}.reduceByKey(_ + _)
-
+//    val c = buyGoodsKindRDD.map(s=> (s._2, s._1)).join(buyCount).
+//      map{ case (goodsID, ((cookie, date, kind), count)) => ((cookie, date, kind), (goodsID, count))}
+//    val d = buyGoodsKindRDD.join(c).map{ case ((cookie, date, kind), (goodsID, goods))}
     // 计算用户购买物品在同一类别下的关联度
-    val result = buyGoodsKindRDD.join(buyGoodsKindRDD)
+    val result0 = buyGoodsKindRDD.join(buyGoodsKindRDD)
       .filter{ case ((cookie, date, kind), (goodsID1, goodsID2)) => goodsID1 != goodsID2}
       .map{ case ((cookie, date, kind), (goodsID1, goodsID2)) => ((goodsID1, goodsID2), 1)}.reduceByKey(_ + _)
       .map{ case ((goodsID1, goodsID2), count) => (goodsID2, (goodsID1, count))}
-      .join(buyCount)
-      .map{ case (goodsID2, ((goodsID1, count), goodsID2Count)) => (goodsID1, goodsID2, count.toDouble / goodsID2Count)}
+      val result = result0.join(buyCount)
+        .map{ case (goodsID2, ((goodsID1, count), goodsID2Count)) => (goodsID1, goodsID2, count.toDouble / goodsID2Count)}
     val sorting = result.map{ case (goodsID1, goodsID2, similarity) => (goodsID1, Seq((goodsID2, similarity)))}
-      .reduceByKey((s1,s2) => {accumulator += 1; s1 ++ s2}).mapValues(seq => seq.sortWith(_._2 > _._2).map(_._1).mkString("#"))
+      .reduceByKey((s1,s2) => s1 ++ s2).mapValues(seq => {accumulator += 1; seq.sortWith(_._2 > _._2).map(_._1).mkString("#")})
 
     if (redis) {
       logger.info(s"output result to redis, host: ${ConfigurationBL.get("redis.host")}.")
-      sc.toRedisKV(sorting.map(s => ("rcmd_bab_goods_" + s._1, s._2)))
+      saveToRedis(sorting.map(s => ("rcmd_bab_goods_" + s._1, s._2)), accumulator2)
       logger.info("finished to output to redis.")
-      message.append(s"插入 rcmd_bab_goods_*: $accumulator.")
+      message.append(s"rcmd_bab_goods_*: $accumulator.")
+      message.append(s"插入redis rcmd_bab_goods_*: $accumulator2.")
     }
     if (local) {
       logger.info("begin to output result to local redis.")
@@ -86,7 +100,19 @@ class BuyGoodsSimilarity extends Tool{
       result.take(50).foreach(println)
       logger.info("finished to output result to local redis.")
     }
+    Message.message.append(message)
     sc.stop()
+  }
+
+  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+    rdd.foreachPartition(partition => {
+      val jedis = RedisClient.pool.getResource
+      partition.foreach(s => {
+        accumulator += 1
+        jedis.set(s._1, s._2)
+      })
+      jedis.close()
+    })
   }
 }
 
@@ -99,6 +125,6 @@ object BuyGoodsSimilarity {
   def execute(args: Array[String]): Unit ={
     val buyGoodsSimilarity = new BuyGoodsSimilarity with ToolRunner
     buyGoodsSimilarity.run(args)
-    MailServer.send(buyGoodsSimilarity.message.toString())
+//    MailServer.send(buyGoodsSimilarity.message.toString())
   }
 }

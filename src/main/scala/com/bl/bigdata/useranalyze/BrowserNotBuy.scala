@@ -1,9 +1,14 @@
 package com.bl.bigdata.useranalyze
 
-import com.bl.bigdata.mail.MailServer
-import com.bl.bigdata.util.{HiveDataUtil, Tool, ToolRunner, ConfigurationBL}
+import java.text.SimpleDateFormat
+import java.util.Date
+
+import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.util._
 import org.apache.logging.log4j.LogManager
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.{Accumulator, SparkContext, SparkConf}
 import com.redislabs.provider.redis._
 
 /**
@@ -31,28 +36,45 @@ class BrowserNotBuy extends Tool {
     }
     val sc = new SparkContext(sparkConf)
     val accumulator = sc.accumulator(0)
+    val accumulator2 = sc.accumulator(0)
 
-    val a = HiveDataUtil.read(input, sc)
-      // 提取的字段: 商品类别,cookie,日期,用户行为编码,商品id
-      .map( line => {
-      //cookie ID, member id, session id, goods id, goods name, quality,
-      // event data, behavior code, channel, category sid, dt
-      val w = line.split("\t")
-      // cookie,日期,用户行为编码,商品id
-      ((w(0), w(6).substring(0, w(6).indexOf(" "))), w(7), (w(9), w(3)))
-    })
+
+    val sdf = new SimpleDateFormat("yyyyMMdd")
+    val date = new Date
+    val start = sdf.format(new Date(date.getTime - 24000L * 3600 * 60))
+    val sql = "select cookie_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
+      s"where dt >= $start"
+
+    val hive = new HiveContext(sc)
+    val a = hive.sql(sql).rdd.map(row => ((row.getString(0), {val d = row.getString(1); d.substring(0, d.indexOf(" "))}),
+      row.getString(2), (row.getString(3), row.getString(4))))
+//    val a = HiveDataUtil.readHive(sql, sc)
+//      // 提取的字段: 商品类别,cookie,日期,用户行为编码,商品id
+//      .map( line => {
+//      //cookie ID, member id, session id, goods id, goods name, quality,
+//      // event data, behavior code, channel, category sid, dt
+//      val w = line.split("\t")
+//      // cookie,日期,用户行为编码,商品id
+//      ((w(0), w(6).substring(0, w(6).indexOf(" "))), w(7), (w(9), w(3)))
+//    })
 
     val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000")}
     val buyRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("4000")}
-    val browserNotBuy = browserRDD subtract buyRDD map (s => (s._1._1, Seq(s._3))) reduceByKey ((s1,s2) => {accumulator += 1; s1 ++ s2}) map (item => ("rcmd_cookieid_view_" + item._1, item._2.distinct.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).mkString(",")).mkString("#")))
+    val browserNotBuy = browserRDD subtract buyRDD map (s => (s._1._1, Seq(s._3))) reduceByKey ((s1,s2) => s1 ++ s2) map (item => {accumulator += 1;
+      ("rcmd_cookieid_view_" + item._1, item._2.distinct.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).mkString(",")).mkString("#"))})
 
     if (redis) {
       logger.info("starting to output data to redis:")
-      sc toRedisKV browserNotBuy
+//      sc toRedisKV browserNotBuy
+      saveToRedis(browserNotBuy, accumulator2)
       logger.info("finished to output data to redis.")
-      message.append(s"插入 rcmd_cookieid_view_*: $accumulator\n")
+      message.append(s"rcmd_cookieid_view_*: $accumulator\n")
+      message.append(s"插入redis rcmd_cookieid_view_*: $accumulator2\n")
     }
     if (local) browserNotBuy.take(50).foreach(logger.info(_))
+
+    Message.message.append(message)
+
     sc.stop()
   }
   /**
@@ -63,6 +85,17 @@ class BrowserNotBuy extends Tool {
     */
   def format(items: Seq[(String, String)]): String = {
     items.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).mkString(",")).mkString("#")
+  }
+
+  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+    rdd.foreachPartition(partition => {
+      val jedis = RedisClient.pool.getResource
+      partition.foreach(s => {
+        accumulator += 1
+        jedis.set(s._1, s._2)
+      })
+      jedis.close()
+    })
   }
 }
 
@@ -75,6 +108,6 @@ object BrowserNotBuy {
   def execute(args:Array[String]): Unit ={
     val browserNotBuy = new BrowserNotBuy with ToolRunner
     browserNotBuy.run(args)
-    MailServer.send(browserNotBuy.message.toString())
+//    MailServer.send(browserNotBuy.message.toString())
   }
 }

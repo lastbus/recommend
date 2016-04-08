@@ -1,4 +1,4 @@
-package bl.testing.logging
+package bl.testing.mess.logging
 
 import org.apache.logging.log4j.LogManager
 

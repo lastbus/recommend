@@ -1,4 +1,4 @@
-package com.bl.bigdata.sparksql
+package bl.testing.mess.sql
 
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}

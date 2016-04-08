@@ -36,15 +36,15 @@ object MailServer {
       email.setAuthenticator(new DefaultAuthenticator("disanyuzhou2016@sina.com", "sh1@bl2$3"))
       email.setFrom("disanyuzhou2016@sina.com")
       email.addTo("Ke.Ma@bl.com")
+      email.addTo("JuTao.Hao@bl.com")
       email
     } else {
       email.setHostName("mail.bl.com")
       email.setAuthenticator(new DefaultAuthenticator("MK33", "Make819307659"))
       email.setFrom("Ke.Ma@bl.com")
       email.addTo("Ke.Ma@bl.com")
+      email.addTo("JuTao.Hao@bl.com")
       email
     }
   }
-
-
 }

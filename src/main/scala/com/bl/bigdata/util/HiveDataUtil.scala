@@ -5,7 +5,7 @@ import java.util.Date
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{Path, FileSystem}
-import org.apache.hadoop.mapred.JobConf
+import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
 
@@ -32,14 +32,16 @@ object HiveDataUtil {
 
 
   def main(args: Array[String]) {
-    val file = "D:\\2\\"
-    ConfigurationBL.addResource("recmd-conf.xml")
-
     val sparkConf = new SparkConf().setMaster("local[*]").setAppName("test")
     val sc = new SparkContext(sparkConf)
-    val r = read(file, sc)
-//    r.collect().foreach(println)
-    val a = r.filter(_ == null).count()
-    println(r.count())
+    val sql = "select cookie_id, member_id, goods_sid from recommendation.user_behavior_raw_data"
+    readHive(sql, sc)
+    sc.stop()
+  }
+
+  def readHive(sql: String, sc: SparkContext): RDD[String] = {
+    val hiveContext = new HiveContext(sc)
+    val r = hiveContext.sql(sql)
+    r.rdd.map(r => r.toString()).map(s=>s.substring(1,s.length - 1))
   }
 }

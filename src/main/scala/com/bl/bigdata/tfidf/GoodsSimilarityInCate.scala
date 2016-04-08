@@ -1,6 +1,7 @@
 package com.bl.bigdata.tfidf
 
-import com.bl.bigdata.util.{ConfigurationBL, Tool, ToolRunner}
+import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.util.{RedisClient, ConfigurationBL, Tool, ToolRunner}
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.{Put, Result}
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
@@ -10,9 +11,11 @@ import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.mllib.linalg.{SparseVector => SV, _}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.{Accumulator, SparkConf, SparkContext}
 import com.redislabs.provider.redis._
 
+import scala.StringBuilder
 import scala.collection.mutable
 
 
@@ -31,6 +34,7 @@ import scala.collection.mutable
 class GoodsSimilarityInCate extends Tool with Serializable {
 
   val featuresNum = 1 << 16
+  private val message = new StringBuilder()
 
   override def run(args: Array[String]): Unit = {
 
@@ -52,13 +56,20 @@ class GoodsSimilarityInCate extends Tool with Serializable {
         sparkConf.set(k, v)
     val sc = new SparkContext(sparkConf)
 
-    val rawRDD = sc.textFile(inputPath)
-      .map(line => {
-        // 提取字段：商品 id，商品编号，商品种类，商品品牌，商品价格，商品属性
-        val attributes = line.split(delimiter)
-        // 商品 id，商品编号，商品种类，商品品牌，商品属性，商品价格
-        (attributes(0), attributes(1), attributes(2), attributes(3), attributes(5), attributes(4))
-      })
+    val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
+      " from recommendation.product_properties_raw_data"
+    val hiveContext = new HiveContext(sc)
+//    val rawRDD = sc.textFile(inputPath)
+//      .map(line => {
+//        // 提取字段：商品 id，商品编号，商品种类，商品品牌，商品价格，商品属性
+//        val attributes = line.split(delimiter)
+//        // 商品 id，商品编号，商品种类，商品品牌，商品属性，商品价格
+//        (attributes(0), attributes(1), attributes(2), attributes(3), attributes(5), attributes(4))
+//      })
+    val rawRDD = hiveContext.sql(sql).rdd
+      .map(row => if (!row.anyNull) (row.getString(0), row.getString(1), row.getLong(2).toString,
+                      row.getString(3), row.getString(5), row.getDouble(4).toString) else null)
+      .filter(_ != null)
 
     // 计算每个类别的商品价格分布，分为 5 份，假设每个类别的商品价格数大于 5 个。
     val categoryRDD = rawRDD.map { case (goodsID, itemNo, category, band, attribute, price) => (category, price) }
@@ -118,7 +129,11 @@ class GoodsSimilarityInCate extends Tool with Serializable {
       .reduceByKey((s1, s2) => s1 ++ s2)
       .map { case (id1, seq) => ("rcmd_sim_" + id1, seq.sortWith((seq1, seq2) => seq1._2 > seq2._2).take(20).map(_._1).mkString("#"))}
 
-    if (redis) sc.toRedisKV(similarity)
+    if (redis) {
+      val accumulator = sc.accumulator(0)
+      saveToRedis(similarity, accumulator)
+      message.append(s"同类商品相似性:\n插入rcmd_sim_* :  $accumulator\n ")
+    }
 
     if (hbase) {
       // save to hbase
@@ -140,14 +155,30 @@ class GoodsSimilarityInCate extends Tool with Serializable {
           put.addColumn(columnFamilyBytes, columnNameBytes, Bytes.toBytes(seqString)))
       }
         .saveAsNewAPIHadoopDataset(job.getConfiguration)
-    } else {
+    }
+    if (local) {
       similarity.first()
     }
+
+    Message.message.append(message)
+
     sc.stop()
+  }
+
+  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+    rdd.foreachPartition(partition => {
+      val jedis = RedisClient.pool.getResource
+      partition.foreach(s => {
+        accumulator += 1
+        jedis.set(s._1, s._2)
+      })
+      jedis.close()
+    })
   }
 
   /**
     * 计算商品的属性和价格的 TF
+ *
     * @param array 属性集
     * @param price 价格
     * @param priceArray 价格的等级
@@ -183,7 +214,12 @@ class GoodsSimilarityInCate extends Tool with Serializable {
 
 object GoodsSimilarityInCate extends Serializable {
   def main(args: Array[String]) {
-    ConfigurationBL.addResource("recmd-conf.xml")
-    (new GoodsSimilarityInCate).run(args)
+    execute(args)
+  }
+
+  def execute(args: Array[String]): Unit ={
+    val goodsSimilarity = new GoodsSimilarityInCate with  ToolRunner
+    goodsSimilarity.run(args)
+//    MailServer.send(goodsSimilarity.message.toString())
   }
 }

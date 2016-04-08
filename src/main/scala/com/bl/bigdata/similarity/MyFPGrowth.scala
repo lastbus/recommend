@@ -1,6 +1,5 @@
 package com.bl.bigdata.similarity
 
-import com.bl.bigdata.mail.{UserBehaviorRawData1, UserBehaviorRawData}
 import com.bl.bigdata.util.{ToolRunner, ConfigurationBL, Tool}
 import org.apache.spark.mllib.fpm.FPGrowth
 import org.apache.spark.{SparkContext, SparkConf}

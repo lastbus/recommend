@@ -1,4 +1,4 @@
-package bl.testing
+package bl.testing.mess
 
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.{Put, Result}

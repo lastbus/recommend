@@ -3,11 +3,20 @@ package com.bl.bigdata.ranking
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.mail.MailServer
-import com.bl.bigdata.util.{ToolRunner, Tool, ConfigurationBL}
+import com.bl.bigdata.SparkEnv
+import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.util._
 import com.redislabs.provider.redis._
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.{TableName, HBaseConfiguration}
+import org.apache.hadoop.hbase.client._
+import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.mapreduce.Job
 import org.apache.logging.log4j.LogManager
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.{HashPartitioner, Accumulator, SparkContext}
+import org.apache.spark.rdd.RDD
 import redis.clients.jedis.{JedisPool, JedisPoolConfig}
 
 /**
@@ -15,7 +24,7 @@ import redis.clients.jedis.{JedisPool, JedisPoolConfig}
  * 最近一天、七天，n 天，乘上一个权重
  * Created by MK33 on 2016/3/21.
  */
-class HotSaleGoods extends Tool {
+class HotSaleGoods extends Tool with SparkEnv{
 
   private val logger = LogManager.getLogger(this.getClass)
   private val message = new StringBuilder
@@ -25,60 +34,104 @@ class HotSaleGoods extends Tool {
     message.append("品类热销商品：\n")
     val input = ConfigurationBL.get("user.order.raw.data")
     val output = ConfigurationBL.get("recmd.output")
+    val hbase = output.contains("hbase")
     val redis = output.contains("redis")
     val local = output.contains("local")
 
-    val deadTimeOne = HotSaleGoods.getDateBeforeNow(ConfigurationBL.get("day.before.today.one").toInt)
-    val deadTimeOneIndex = ConfigurationBL.get("hot.sale.index.one").toDouble
-    val deadTimeTwo = HotSaleGoods.getDateBeforeNow(ConfigurationBL.get("day.before.today.two").toInt)
-
-    val sparkConf = new SparkConf()
-      .setMaster("local[*]")
-      .setAppName("品类热销商品")
+    val deadTimeOne = HotSaleGoods.getDateBeforeNow(30)
+    val deadTimeOneIndex = 2
+    sparkConf.setMaster("local[*]").setAppName("品类热销商品")
     if (redis)
       for ((key, value) <- ConfigurationBL.getAll.filter(_._1.startsWith("redis.")))
         sparkConf.set(key, value)
-    val sc = new SparkContext(sparkConf)
     val accumulator = sc.accumulator(0)
+    val accumulator2 = sc.accumulator(0)
 
-    val result = sc.textFile(input).map(line => {
-      val w = line.split("\t")
-      (w(3), w(4), w(6).toDouble, w(7), w(9), w(10))
-    })
-      .filter(item => HotSaleGoods.filterDate(item, deadTimeTwo))
-      .map { case (goodsID, goodsName, sale_num, sale_time, categoryID, category) =>
-        (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID, category))
-      }.reduceByKey((s1, s2) => (s1._1, s1._2 + s2._2, s1._3, s1._4))
-      .map { case (goodsID, (goodsName, sale_num, categoryID, category)) =>
+
+    val sdf = new SimpleDateFormat("yyyyMMdd")
+    val date = new Date
+    val start = sdf.format(new Date(date.getTime - 24000L * 3600 * 60))
+    val sql = s"select goods_sid, goods_name, quanlity, event_date, category_sid from recommendation.user_behavior_raw_data where dt >= $start"
+
+    val hiveContext = new HiveContext(sc)
+//    val result = sc.textFile(input).map(line => {
+//      val w = line.split("\t")
+//      (w(3), w(4), w(6).toDouble, w(7), w(9), w(10))
+//    })
+//      .filter(item => HotSaleGoods.filterDate(item, deadTimeTwo))
+    val result = hiveContext.sql(sql).rdd.
+      map(row => if (!row.anyNull) (row.getString(0), row.getString(1), row.getInt(2),
+                                    row.getString(3), row.getString(4)) else null).filter(_ != null)
+      .map { case (goodsID, goodsName, sale_num, sale_time, categoryID) =>
+        (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID))
+      }.reduceByKey((s1, s2) => (s1._1, s1._2 + s2._2, s1._3))
+      .map { case (goodsID, (goodsName, sale_num, categoryID)) =>
         (categoryID, Seq((goodsID, sale_num)))
       }
-      .reduceByKey((s1, s2) =>{accumulator += 1; s1 ++ s2})
-      .map { case (category, seq) => (category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) }
-
+      .reduceByKey((s1, s2) =>s1 ++ s2)
+      .map { case (category, seq) => {accumulator += 1; ("rcmd_cate_hotsale_" + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#"))} }
+result.partitioner
+    result.cache()
     if(redis) {
       logger.info("start to write 热销 to redis.")
-      sc.toRedisKV(result)
+//      sc.toRedisKV(result)
+//      saveToRedis(result, accumulator2)
       logger.info("write finished.")
-      message.append(s"插入 品类热销商品: $accumulator\n")
+      message.append(s"品类热销商品: $accumulator\n")
+      message.append(s"插入redis 品类热销商品: $accumulator2\n")
     }
-    if( local) {
-      val jedisPool = new JedisPool(new JedisPoolConfig, "10.201.128.216", 6379) with Serializable
-      logger.info("begin to write to local")
-      var i = 0
-      result.collect().foreach { case (category, ranking) =>
-        val jedis = jedisPool.getResource
-        jedis.set("rcmd_cate_hotsale_" + category, ranking)
-        jedis.close()
-        i += 1
-      }
-      message.append(s"本地插入redis hot sale 商品: $i\n")
-      logger.info(s"$i key-values are written to local finished.")
+
+    if (hbase){
+      val conf = HBaseConfiguration.create()
+      conf.set(TableOutputFormat.OUTPUT_TABLE, "h1")
+      conf.set("hbase.zookeeper.property.clientPort", "2181")
+      conf.set("hbase.zookeeper.quorum", "10.201.129.81")
+      conf.set("hbase.master", "10.201.129.78:60000")
+
+      val columnFamilyBytes = Bytes.toBytes("c1")
+      val columnNameBytes = Bytes.toBytes("hot_sale")
+
+
+      val job = Job.getInstance(conf)
+      job.setOutputFormatClass(classOf[TableOutputFormat[Put]])
+      job.setOutputKeyClass(classOf[ImmutableBytesWritable])
+      job.setOutputValueClass(classOf[Result])
+      result.map{ case (k, v) => {
+        val put = new Put(Bytes.toBytes(k))
+        (new ImmutableBytesWritable(k.getBytes()), put.addColumn(columnFamilyBytes, columnNameBytes, Bytes.toBytes(v)))
+      }}.saveAsNewAPIHadoopDataset(job.getConfiguration)
+
     }
+//    if( local) {
+//      val jedisPool = new JedisPool(new JedisPoolConfig, "10.201.128.216", 6379) with Serializable
+//      logger.info("begin to write to local")
+//      var i = 0
+//      result.collect().foreach { case (category, ranking) =>
+//        val jedis = jedisPool.getResource
+//        jedis.set("rcmd_cate_hotsale_" + category, ranking)
+//        jedis.close()
+//        i += 1
+//      }
+//      message.append(s"本地插入redis hot sale 商品: $i\n")
+//      logger.info(s"$i key-values are written to local finished.")
+//    }
+
+    result.unpersist()
+    Message.message.append(message)
+
     sc.stop()
   }
 
-
-
+  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+    rdd.foreachPartition(partition => {
+      val jedis = RedisClient.pool.getResource
+      partition.foreach(s => {
+        accumulator += 1
+        jedis.set(s._1, s._2)
+      })
+      jedis.close()
+    })
+  }
 }
 
 object HotSaleGoods {
@@ -87,14 +140,15 @@ object HotSaleGoods {
     execute(args)
   }
 
-  def execute(args: Array[String]): Unit ={
+  def execute(args: Array[String]): Unit = {
     val hotSale = new HotSaleGoods with ToolRunner
     hotSale.run(args)
-    MailServer.send(hotSale.message.toString())
+//    MailServer.send(hotSale.message.toString())
   }
 
   /**
     * 计算今天前 n 天的日期
+ *
     * @param n 前 n 天
     * @return n 天前的日期
     */

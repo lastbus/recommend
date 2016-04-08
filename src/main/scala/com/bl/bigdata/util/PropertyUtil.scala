@@ -10,19 +10,21 @@ import scala.io.Source
 object PropertyUtil {
 
   private val logger = LogManager.getLogger(this.getClass)
-
+  private val DEFAULT_CONFIG_FILE = "/home/blemall/workspace/recommend-mk/config.properties"
   def get(key: String): String = {
-      val properties = loadProperties("/home/blemall/workspace/config.properties")
+      val properties = loadProperties(DEFAULT_CONFIG_FILE)
       if (properties == null || properties.isEmpty)
         null
       else
         properties.getProperty(key)
   }
 
-  private def loadProperties(filename: String): Properties = {
+  private def loadProperties(fileName: String): Properties = {
+    if (fileName == null)
+        throw new IllegalArgumentException("Input file name please")
     val properties = new Properties
     try {
-      using(Source.fromFile(filename)){ r =>
+      using(Source.fromFile(fileName)){ r =>
         val reader = r.bufferedReader()
         properties.load(reader)
       }
