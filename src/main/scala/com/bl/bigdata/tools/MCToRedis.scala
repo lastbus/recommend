@@ -5,10 +5,10 @@ import org.apache.spark.{SparkContext, SparkConf}
 
 /**
   * Created by blemall on 3/30/16.
+  * MC means member_id_cookie_id map
   * only for import data to redis server.Many scenes like this in future
-  *
   */
-object DataToRedis {
+object MCToRedis {
     def main (args: Array[String]) {
         val sparkConf = new SparkConf().setAppName(this.getClass.getName).setMaster("local[*]")
         val sc = new SparkContext(sparkConf)
