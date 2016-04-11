@@ -45,54 +45,54 @@ class Main extends Tool{
 
   override def run(args: Array[String]): Unit = {
 
-//    try {
-//      // 看了又看
-//      BrowserGoodsSimilarity.execute(args)
-//    } catch {
-//      case e: Exception =>
-//        Message.message.append(s"看了又看出错： ${e.getMessage}\n\n")
-//        Thread.sleep(10 * 1000)
-//    }
-//
-//    try {
-//      // 看了最终买
-//      SeeBuyGoodsSimilarity.execute(args)
-//    } catch {
-//      case e: Exception => Message.message.append(s"看了最终买出错： ${e.getMessage}\n\n")
-//        Thread.sleep(15 * 1000)
-//    }
-//    try {
-//      // 买了还买
-//      BuyGoodsSimilarity.execute(args)
-//    } catch {
-//      case e: Exception =>
-//        Message.message.append(s"买了还买出错： ${e.getMessage}\n\n")
-//        Thread.sleep(15 * 1000)
-//    }
-//    try {
-//      // 品类买了还买
-//      CategorySimilarity.execute(args)
-//    } catch {
-//      case e: Exception =>
-//        Message.message.append(s"品类买了还买出错： ${e.getMessage}\n\n")
-//        Thread.sleep(15 * 1000)
-//    }
-//    try {
-//      // 上午 下午 晚上 购买类目
-//      BuyActivityStatistic.execute(args)
-//    } catch {
-//      case e: Exception =>
-//        Message.message.append(s"上午下午晚上购买类目出错： ${e.getMessage}\n\n")
-//        Thread.sleep(10 * 1000)
-//    }
-//    try {
-//      // 最近两个月浏览未购买商品 按时间排序
-//      BrowserNotBuy.execute(args)
-//    } catch {
-//      case e: Exception =>
-//        Message.message.append(s"最近一段时间浏览未购买的商品： ${e.getMessage}\n\n")
-//        Thread.sleep(10 * 1000)
-//    }
+    try {
+      // 看了又看
+      BrowserGoodsSimilarity.execute(args)
+    } catch {
+      case e: Exception =>
+        Message.message.append(s"看了又看出错： ${e.getMessage}\n\n")
+        Thread.sleep(10 * 1000)
+    }
+
+    try {
+      // 看了最终买
+      SeeBuyGoodsSimilarity.execute(args)
+    } catch {
+      case e: Exception => Message.message.append(s"看了最终买出错： ${e.getMessage}\n\n")
+        Thread.sleep(15 * 1000)
+    }
+    try {
+      // 买了还买
+      BuyGoodsSimilarity.execute(args)
+    } catch {
+      case e: Exception =>
+        Message.message.append(s"买了还买出错： ${e.getMessage}\n\n")
+        Thread.sleep(15 * 1000)
+    }
+    try {
+      // 品类买了还买
+      CategorySimilarity.execute(args)
+    } catch {
+      case e: Exception =>
+        Message.message.append(s"品类买了还买出错： ${e.getMessage}\n\n")
+        Thread.sleep(15 * 1000)
+    }
+    try {
+      // 上午 下午 晚上 购买类目
+      BuyActivityStatistic.execute(args)
+    } catch {
+      case e: Exception =>
+        Message.message.append(s"上午下午晚上购买类目出错： ${e.getMessage}\n\n")
+        Thread.sleep(10 * 1000)
+    }
+    try {
+      // 最近两个月浏览未购买商品 按时间排序
+      BrowserNotBuy.execute(args)
+    } catch {
+      case e: Exception =>
+        Message.message.append(s"最近一段时间浏览未购买的商品： ${e.getMessage}\n\n")
+        Thread.sleep(10 * 1000)
+    }
     try {
       // 品类热销商品
       HotSaleGoods.execute(args)
@@ -102,22 +102,22 @@ class Main extends Tool{
         Thread.sleep(10 * 1000)
     }
 
-//    try {
-//      GoodsForSale.execute(args)
-//    } catch {
-//      case e: Exception =>
-//        Message.message.append(s"error in goods available for sale : ${e.getMessage}\n\n" )
-//        Thread.sleep(10 * 1000)
-//    }
-//    try {
-//      GoodsSimilarityInCate.execute(args)
-//    } catch {
-//      case e: Exception =>
-//        Message.message.append(s"同类商品相似性出错 ${e.getMessage}\n\n")
-//        Thread.sleep(10 * 1000)
-//    }
+    try {
+      GoodsForSale.execute(args)
+    } catch {
+      case e: Exception =>
+        Message.message.append(s"error in goods available for sale : ${e.getMessage}\n\n" )
+        Thread.sleep(10 * 1000)
+    }
+    try {
+      GoodsSimilarityInCate.execute(args)
+    } catch {
+      case e: Exception =>
+        Message.message.append(s"同类商品相似性出错 ${e.getMessage}\n\n")
+        Thread.sleep(10 * 1000)
+    }
 
-//    MailServer.send(Message.message.toString())
+    MailServer.send(Message.message.toString())
 
   }
 }

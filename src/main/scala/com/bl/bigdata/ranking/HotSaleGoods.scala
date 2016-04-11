@@ -15,7 +15,7 @@ import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{HashPartitioner, Accumulator, SparkContext}
+import org.apache.spark.{SparkConf, HashPartitioner, Accumulator, SparkContext}
 import org.apache.spark.rdd.RDD
 import redis.clients.jedis.{JedisPool, JedisPoolConfig}
 
@@ -40,10 +40,13 @@ class HotSaleGoods extends Tool with SparkEnv{
 
     val deadTimeOne = HotSaleGoods.getDateBeforeNow(30)
     val deadTimeOneIndex = 2
-    sparkConf.setMaster("local[*]").setAppName("品类热销商品")
+    val sparkConf = new SparkConf().setAppName("品类热销商品")
+    if (local) sparkConf.setMaster("local[*]")
     if (redis)
       for ((key, value) <- ConfigurationBL.getAll.filter(_._1.startsWith("redis.")))
         sparkConf.set(key, value)
+    val sc = new SparkContext(sparkConf)
+
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
@@ -70,12 +73,11 @@ class HotSaleGoods extends Tool with SparkEnv{
       }
       .reduceByKey((s1, s2) =>s1 ++ s2)
       .map { case (category, seq) => {accumulator += 1; ("rcmd_cate_hotsale_" + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#"))} }
-result.partitioner
     result.cache()
     if(redis) {
       logger.info("start to write 热销 to redis.")
 //      sc.toRedisKV(result)
-//      saveToRedis(result, accumulator2)
+      saveToRedis(result, accumulator2)
       logger.info("write finished.")
       message.append(s"品类热销商品: $accumulator\n")
       message.append(s"插入redis 品类热销商品: $accumulator2\n")
@@ -91,8 +93,10 @@ result.partitioner
       val columnFamilyBytes = Bytes.toBytes("c1")
       val columnNameBytes = Bytes.toBytes("hot_sale")
 
-
-      val job = Job.getInstance(conf)
+      val c = sc.hadoopConfiguration
+      c.addResource("hbase-site.xml")
+      c.set(TableOutputFormat.OUTPUT_TABLE, "h1")
+      val job = Job.getInstance(c)
       job.setOutputFormatClass(classOf[TableOutputFormat[Put]])
       job.setOutputKeyClass(classOf[ImmutableBytesWritable])
       job.setOutputValueClass(classOf[Result])
