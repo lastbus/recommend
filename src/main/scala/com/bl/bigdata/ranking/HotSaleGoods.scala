@@ -3,28 +3,25 @@ package com.bl.bigdata.ranking
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.SparkEnv
-import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import com.redislabs.provider.redis._
-import org.apache.hadoop.hbase.io.ImmutableBytesWritable
-import org.apache.hadoop.hbase.{TableName, HBaseConfiguration}
+import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client._
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.logging.log4j.LogManager
-import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{SparkConf, HashPartitioner, Accumulator, SparkContext}
 import org.apache.spark.rdd.RDD
-import redis.clients.jedis.{JedisPool, JedisPoolConfig}
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.{Accumulator, SparkConf, SparkContext}
 
 /**
  * 销量排行：
  * 最近一天、七天，n 天，乘上一个权重
  * Created by MK33 on 2016/3/21.
  */
-class HotSaleGoods extends Tool with SparkEnv{
+class HotSaleGoods extends Tool {
 
   private val logger = LogManager.getLogger(this.getClass)
   private val message = new StringBuilder
@@ -42,6 +39,7 @@ class HotSaleGoods extends Tool with SparkEnv{
     val deadTimeOneIndex = 2
     val sparkConf = new SparkConf().setAppName("品类热销商品")
     if (local) sparkConf.setMaster("local[*]")
+
     if (redis)
       for ((key, value) <- ConfigurationBL.getAll.filter(_._1.startsWith("redis.")))
         sparkConf.set(key, value)

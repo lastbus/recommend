@@ -13,8 +13,9 @@ object RedisUtil extends RedisBase with Serializable {
     val REDIS_PREFIX="rcmd_gwyl_"
 
 
-    def guessWhatYouLike_saveToRedis(sparkConf: SparkConf ,jedisPool: JedisPool, values: Map[String, Array[Rating]]): Unit = {
+    def guessWhatYouLike_saveToRedis(sparkConf: SparkConf , values: Map[String, Array[Rating]]): Unit = {
         connect(sparkConf)
+        val jedisPool = getJedisPool
         val jedis = jedisPool.getResource
         import com.bl.bigdata.util.Implicts.map2HashMap
         values.map{v =>
@@ -26,8 +27,9 @@ object RedisUtil extends RedisBase with Serializable {
         println("finished saving data to redis")
     }
 
-    def saveToRedis(sparkConf: SparkConf, jedisPool: JedisPool, values: Map[String, String]): Unit = {
+    def saveToRedis(sparkConf: SparkConf, values: Map[String, String]): Unit = {
         connect(sparkConf)
+        val jedisPool = getJedisPool
         val jedis = jedisPool.getResource
         values.map{
             v =>

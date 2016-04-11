@@ -162,7 +162,7 @@
                         <configuration>
                             <archive>
                                 <manifest>
-                                    <mainClass>com.bl.bigdata.datasource.HiveDataSource</mainClass>
+                                    <!--<mainClass>com.bl.bigdata.similarity.GuessWhatYouLike$</mainClass>-->
                                     <addClasspath>true</addClasspath>
                                 </manifest>
                             </archive>
