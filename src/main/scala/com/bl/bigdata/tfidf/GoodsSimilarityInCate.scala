@@ -1,7 +1,7 @@
 package com.bl.bigdata.tfidf
 
 import com.bl.bigdata.mail.{Message, MailServer}
-import com.bl.bigdata.util.{RedisClient, ConfigurationBL, Tool, ToolRunner}
+import com.bl.bigdata.util._
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.{Put, Result}
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
@@ -54,7 +54,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     if (redis)
       for ((k, v) <- ConfigurationBL.getAll)
         sparkConf.set(k, v)
-    val sc = new SparkContext(sparkConf)
+    val sc = SparkFactory.getSparkContext()
 
     val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
       " from recommendation.product_properties_raw_data"

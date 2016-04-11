@@ -4,7 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.bl.bigdata.mail.{Message, MailServer}
-import com.bl.bigdata.util.{HiveDataUtil, ConfigurationBL, Tool, ToolRunner}
+import com.bl.bigdata.util._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkConf, SparkContext}
@@ -40,7 +40,7 @@ class BuyActivityStatistic extends Tool {
       for ((key, value) <- ConfigurationBL.getAll if key.startsWith("redis."))
         sparkConf.set(key, value)
 
-    val sc = new SparkContext(sparkConf)
+    val sc = SparkFactory.getSparkContext()
 
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")

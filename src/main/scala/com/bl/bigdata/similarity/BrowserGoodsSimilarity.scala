@@ -41,7 +41,7 @@ class BrowserGoodsSimilarity extends Tool {
     if (redis)
       for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
         sparkConf.set(k, v)
-    val sc = new SparkContext(sparkConf)
+    val sc = SparkFactory.getSparkContext()
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 

@@ -4,7 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.bl.bigdata.mail.{Message, MailServer}
-import com.bl.bigdata.util.{RedisClient, HiveDataUtil, ConfigurationBL, Tool}
+import com.bl.bigdata.util._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
@@ -35,7 +35,7 @@ class SeeBuyGoodsSimilarity extends Tool {
       for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
         sparkConf.set(k, v)
 
-    val sc = new SparkContext(sparkConf)
+    val sc = SparkFactory.getSparkContext()
 
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")

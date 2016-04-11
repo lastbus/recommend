@@ -3,7 +3,7 @@ package com.bl.bigdata.ranking
 import java.util
 
 import com.bl.bigdata.mail.{Message, MailServer}
-import com.bl.bigdata.util.{RedisClient, ConfigurationBL, Tool, ToolRunner}
+import com.bl.bigdata.util._
 import com.redislabs.provider.redis._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
@@ -34,7 +34,7 @@ class GoodsForSale extends Tool {
       for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
         sparkConf.set(k, v)
     }
-    val sc = new SparkContext(sparkConf)
+    val sc = SparkFactory.getSparkContext()
     val hiveContext = new HiveContext(sc)
 //    val rawRDD = sc.textFile(inputPath)
     toRedis1(hiveContext)
