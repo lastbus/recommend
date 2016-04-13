@@ -1,14 +1,15 @@
 package com.bl.bigdata
 
 
+import java.text.SimpleDateFormat
+import java.util.Date
+
 import com.bl.bigdata.mail.{Message, MailServer}
 import com.bl.bigdata.ranking.{GoodsForSale, HotSaleGoods}
 import com.bl.bigdata.similarity.{BuyGoodsSimilarity, SeeBuyGoodsSimilarity, BrowserGoodsSimilarity}
 import com.bl.bigdata.tfidf.GoodsSimilarityInCate
 import com.bl.bigdata.useranalyze.{UserCookie, BrowserNotBuy, BuyActivityStatistic, CategorySimilarity}
 import com.bl.bigdata.util._
-
-import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 
@@ -20,24 +21,6 @@ object Main {
   def main(args: Array[String]) {
     val main = new Main with ToolRunner
     main.run(args)
-
-
-//    val sparkConf = new SparkConf().setMaster("local").setAppName("tt")
-//    val sc = new SparkContext(sparkConf)
-//    val d = sc.parallelize(Seq(("a", "b")))
-//    println("=======11111111111===========")
-//    d.foreachPartition( p => {
-//      println("=====222222=======")
-//      val jedis = RedisClient.pool.getResource
-//    jedis.flushAll()
-//      p.foreach(t => {println(t); jedis.set(t._1, t._2)})
-//      jedis.close()
-//      println("-----------------")
-//    })
-//    println("=======5555555555555=====")
-//
-//    sc.stop()
-
   }
 
 
@@ -47,6 +30,9 @@ object Main {
 class Main extends Tool {
 
   override def run(args: Array[String]): Unit = {
+    val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
+    val date = new Date()
+    Message.message.append(s"============  task begin at : ${sdf.format(date)} ========= \n\n\n")
     val list = new ListBuffer[Tool]
     if (args.length == 0) {
       list += (new BrowserGoodsSimilarity with ToolRunner) // 看了又看
@@ -72,8 +58,9 @@ class Main extends Tool {
                             "UserCookie".toLowerCase() -> new UserCookie with ToolRunner)
       for (arg <- args; key = arg.toLowerCase() if map.contains(key)) list += (map(key))
     }
-
-    for (tool <- list.toArray) {
+    Message.message.append(s"there are ${list.size} tasks. \n\n")
+    println("==============       " + list.size + "   ================")
+    for (tool <- list) {
       try {
         tool.run(args)
       } catch {
@@ -83,8 +70,10 @@ class Main extends Tool {
       }
     }
 
-    if ( ConfigurationBL.get("mail", "true").toBoolean )
-      MailServer.send(Message.message.toString())
+    val date2 = new Date()
+    val t = (date2.getTime - date.getTime) / 1000
+    Message.message.append(s"=============  time taken： $t s =================")
+    MailServer.send(Message.message.toString())
 
 //    try {
 //      // 看了又看

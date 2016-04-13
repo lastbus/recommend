@@ -3,13 +3,12 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkContext, SparkConf}
-import com.redislabs.provider.redis._
+import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * 计算用户浏览的物品和购买的物品之间的关联度
@@ -18,12 +17,10 @@ import com.redislabs.provider.redis._
   * Created by MK33 on 2016/3/15.
   */
 class SeeBuyGoodsSimilarity extends Tool {
-  private val message = new StringBuilder
   private val logger = LogManager.getLogger(this.getClass.getName)
 
   override def run(args: Array[String]): Unit = {
-    message.clear()
-    message.append("看了最终买:\n")
+    Message.message.append("看了最终买:\n")
     val inputPath = ConfigurationBL.get("user.behavior.raw.data")
     val output = ConfigurationBL.get("recmd.output")
     val local = output.contains("local")
@@ -79,22 +76,21 @@ class SeeBuyGoodsSimilarity extends Tool {
       .reduceByKey((s1, s2) =>  s1 ++ s2)
       .map(s => { accumulator += 1;("rcmd_shop_" + s._1, s._2.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) })
     browserAndBuy.cache()
-    message.append(browserAndBuy.count() + "\n")
-    message.append(browserAndBuy.first() + "\n")
+    Message.message.append(browserAndBuy.count() + "\n")
+    Message.message.append(browserAndBuy.first() + "\n")
 
     // 如果是本地运行，则直接输出，否则保存在 hadoop 中。
     if (redis) {
       saveToRedis2(browserAndBuy, accumulator2)
-      message.append(s"rcmd_shop_*: $accumulator")
-      message.append(s"插入redis rcmd_shop_*: $accumulator2")
+      Message.message.append(s"\t\trcmd_shop_*: $accumulator")
+      Message.message.append(s"\t\t插入redis rcmd_shop_*: $accumulator2")
 
     }
     if (local) browserAndBuy.take(50).foreach(println)
 //      sc.toRedisKV(browserAndBuy)
     browserAndBuy.unpersist()
 
-    Message.message.append(message)
-    sc.stop()
+//    sc.stop()
   }
 
   def saveToRedis2(rdd: RDD[(String, String)], c: Accumulator[Int]): Unit = {

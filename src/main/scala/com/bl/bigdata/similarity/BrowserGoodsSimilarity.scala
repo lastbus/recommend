@@ -1,14 +1,13 @@
 package com.bl.bigdata.similarity
 
 import java.text.SimpleDateFormat
-import java.util.{Calendar, Date}
+import java.util.Date
 
-import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf, SparkContext}
-import com.redislabs.provider.redis._
+import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * 计算用户浏览的某类商品之间的相似度
@@ -20,8 +19,6 @@ import com.redislabs.provider.redis._
   */
 class BrowserGoodsSimilarity extends Tool {
 
-  private val message = new StringBuilder
-
   val isEmpty = (temp: String) => {
     if (temp.trim.length == 0) true
     else if (temp.equalsIgnoreCase("NULL")) true
@@ -29,9 +26,7 @@ class BrowserGoodsSimilarity extends Tool {
   }
 
   override def run(args: Array[String]): Unit = {
-    message.clear()
-    message.append("看了又看:\n")
-    val inputPath = ConfigurationBL.get("user.behavior.raw.data")
+    Message.message.append("看了又看:\n")
     val output = ConfigurationBL.get("recmd.output")
     val local = output.contains("local")
     val redis = output.contains("redis")
@@ -49,7 +44,7 @@ class BrowserGoodsSimilarity extends Tool {
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date = new Date
     val start = sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
-    val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_sid from recommendation.user_behavior_raw_data  where dt >= " + start
+    val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_s from recommendation.user_behavior_raw_data  where dt >= " + start
 
     val hiveContext = new HiveContext(sc)
     val rawRdd = hiveContext.sql(sql).rdd
@@ -83,9 +78,9 @@ class BrowserGoodsSimilarity extends Tool {
     rawRdd.unpersist()
     if (redis) {
       saveToRedis(good1Good2Similarity, accumulator2)
-      message.append(s"rcmd_view_*: $accumulator\n")
-      message.append(s"插入redis rcmd_view_*: $accumulator2\n")
-      Message.message.append(message)
+      Message.message.append(s"\t\trcmd_view_*: $accumulator\n")
+      Message.message.append(s"\t\t插入redis rcmd_view_*: $accumulator2\n")
+//      Message.message.append(message)
     }
     if (local) good1Good2Similarity take (50) foreach println
     sc.stop()

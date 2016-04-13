@@ -17,11 +17,9 @@ import com.redislabs.provider.redis._
 class BrowserNotBuy extends Tool {
 
   private val logger = LogManager.getLogger(this.getClass.getName)
-  private val message = new StringBuilder
 
   override def run(args: Array[String]): Unit ={
-    message.clear()
-    message.append("最近两个月浏览未购买商品 按时间排序:\n")
+    Message.message.append("最近两个月浏览未购买商品 按时间排序:\n")
 
     val input = ConfigurationBL.get("user.behavior.raw.data")
     val output = ConfigurationBL.get("recmd.output")
@@ -68,14 +66,11 @@ class BrowserNotBuy extends Tool {
 //      sc toRedisKV browserNotBuy
       saveToRedis(browserNotBuy, accumulator2)
       logger.info("finished to output data to redis.")
-      message.append(s"rcmd_cookieid_view_*: $accumulator\n")
-      message.append(s"插入redis rcmd_cookieid_view_*: $accumulator2\n")
+      Message.message.append(s"rcmd_cookieid_view_*: $accumulator\n")
+      Message.message.append(s"插入redis rcmd_cookieid_view_*: $accumulator2\n")
     }
     if (local) browserNotBuy.take(50).foreach(logger.info(_))
-
-    Message.message.append(message)
-
-    sc.stop()
+//    sc.stop()
   }
   /**
     * 将输入的 Array[(category ID, goods ID)] 转换为

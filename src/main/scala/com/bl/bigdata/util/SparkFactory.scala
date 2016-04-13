@@ -30,6 +30,7 @@ object SparkFactory {
       else sc
     }
 
+
   def destroyResource(): Unit ={
     if (sc != null) sc.stop()
   }

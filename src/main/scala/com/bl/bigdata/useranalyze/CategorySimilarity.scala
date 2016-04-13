@@ -24,12 +24,10 @@ import com.redislabs.provider.redis._
 class CategorySimilarity extends Tool {
 
   private val logger = LogManager.getLogger(this.getClass.getName)
-  private val message = new StringBuilder
 
   def run(args: Array[String]): Unit ={
     logger.info("starting to calculator buy goods similarity.")
-    message.clear()
-    message.append("品类买了还买:\n")
+    Message.message.append("品类买了还买:\n")
     val inputPath = ConfigurationBL.get("user.behavior.raw.data")
     val inputPath2 = ConfigurationBL.get("dim.category")
     val outPath = ConfigurationBL.get("recmd.output")
@@ -105,8 +103,8 @@ class CategorySimilarity extends Tool {
 //      sc.toRedisKV(sorting.map(s => ("rcmd_bab_category_" + s._1, s._2)))
       saveToRedis(sorting.map(s => ("rcmd_bab_category_" + s._1, s._2)), accumulator2)
       logger.info("finished to output to redis.")
-      message.append(s"rcmd_bab_category_*: $accumulator\n")
-      message.append(s"插入redis rcmd_bab_category_*: $accumulator2\n")
+      Message.message.append(s"rcmd_bab_category_*: $accumulator\n")
+      Message.message.append(s"插入redis rcmd_bab_category_*: $accumulator2\n")
     }
     if (local) {
       logger.info("begin to output result to local redis.")
@@ -114,8 +112,7 @@ class CategorySimilarity extends Tool {
       result.take(50).foreach(println)
       logger.info("finished to output result to local redis.")
     }
-    Message.message.append(message)
-    sc.stop()
+//    sc.stop()
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {

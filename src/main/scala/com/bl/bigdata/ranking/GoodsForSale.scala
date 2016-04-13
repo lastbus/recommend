@@ -17,10 +17,9 @@ import org.apache.spark.{Accumulator, SparkConf, SparkContext}
 class GoodsForSale extends Tool {
 
   private val logger = LogManager.getLogger(this.getClass.getName)
-  private val message = new StringBuilder
 
   override def run(args: Array[String]): Unit = {
-    message.append("goods for sale:\n")
+    Message.message.append("goods for sale:\n")
     logger.info("execute goods for sale.")
     val inputPath = ConfigurationBL.get("goods.for.sale.input.path")
     val outputPath = ConfigurationBL.get("goods.for.sale.output.path")
@@ -40,10 +39,7 @@ class GoodsForSale extends Tool {
     toRedis1(hiveContext)
     toRedis2(hiveContext)
     category(hiveContext)
-
-    Message.message.append(message)
-
-    sc.stop()
+//    sc.stop()
   }
 
   /**
@@ -68,7 +64,7 @@ class GoodsForSale extends Tool {
     }}
 //    sc.toRedisKV(goodsIDToCategoryIDRDD)
     saveToRedis(goodsIDToCategoryIDRDD, count1Accumulator)
-    message.append(s"插入 rcmd_cate_* : $count1Accumulator\n")
+    Message.message.append(s"插入 rcmd_cate_* : $count1Accumulator\n")
 
     val categoryIDToGoodsID = readRDD.map(s => (s._2, Seq(s._1))).reduceByKey(_ ++ _)
       .map { case (categoryID, goodsID) => {
@@ -77,7 +73,7 @@ class GoodsForSale extends Tool {
       }}
 //    sc.toRedisKV(categoryIDToGoodsID)
     saveToRedis(categoryIDToGoodsID, count2Accumulator)
-    message.append(s"插入 rcmd_cate_goods_*: $count2Accumulator\n")
+    Message.message.append(s"插入 rcmd_cate_goods_*: $count2Accumulator\n")
 
   }
 
@@ -114,7 +110,7 @@ class GoodsForSale extends Tool {
     }}
 //    sc.hashKVRDD2Redis(r)
     saveToRedisHash(r, accumulator)
-    message.append(s"插入 rcmd_orig_*: $accumulator\n")
+    Message.message.append(s"插入 rcmd_orig_*: $accumulator\n")
   }
 
   def saveToRedisHash(rdd: RDD[(String, java.util.HashMap[String, String])], accumulator: Accumulator[Int]): Unit ={
@@ -173,8 +169,8 @@ class GoodsForSale extends Tool {
 //    sc.toRedisKV(readRDD)
     saveToRedis(readRDD, accumulator2)
 //    message.append(s"插入 rcmd_parent_category_*: $accumulator1\n")
-    message.append(s"插入 rcmd_parent_category_*: $accumulator2\n")
-    message.append(s"插入 rcmd_subcategory_*: $accumulator2\n")
+    Message.message.append(s"插入 rcmd_parent_category_*: $accumulator2\n")
+    Message.message.append(s"插入 rcmd_subcategory_*: $accumulator2\n")
   }
 
 }

@@ -1,5 +1,6 @@
 package com.bl.bigdata.useranalyze
 
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util.{ToolRunner, Tool, RedisClient, SparkFactory}
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
@@ -9,10 +10,9 @@ import org.apache.spark.sql.hive.HiveContext
   * Created by MK33 on 2016/4/11.
   */
 class UserCookie extends Tool {
-  val message = new StringBuilder
 
   override def run(args: Array[String]): Unit = {
-    message.append("将用户id 和 cookie id 导入 redis：")
+    Message.message.append("将用户id 和 cookie id 导入 redis：\n")
     val sc = SparkFactory.getSparkContext()
     val hiveContext = new HiveContext(sc)
     val sql = "select registration_id, cookie_id, event_date from recommendation.memberid_cookieid"
@@ -22,8 +22,7 @@ class UserCookie extends Tool {
       .map(r => ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).mkString("#")))
     val count = sc.accumulator(0)
     saveListToRedis(r, count)
-    message.append(s"导入 redis 条数： $count 。")
-
+    Message.message.append(s"导入 redis 条数： $count \n")
   }
 
 

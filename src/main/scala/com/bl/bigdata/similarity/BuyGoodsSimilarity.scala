@@ -20,11 +20,10 @@ import com.redislabs.provider.redis._
 class BuyGoodsSimilarity extends Tool{
 
   private val logger = LogManager.getLogger(this.getClass.getName)
-  private val message = new StringBuilder
 
   override def run(args: Array[String]): Unit = {
     logger.info("starting to calculator buy goods similarity.")
-    message.append("买了还买:\n")
+    Message.message.append("买了还买:\n")
 
     val inputPath = ConfigurationBL.get("user.behavior.raw.data")
     val inputPath2 = ConfigurationBL.get("dim.category")
@@ -91,8 +90,8 @@ class BuyGoodsSimilarity extends Tool{
       logger.info(s"output result to redis, host: ${ConfigurationBL.get("redis.host")}.")
       saveToRedis(sorting.map(s => ("rcmd_bab_goods_" + s._1, s._2)), accumulator2)
       logger.info("finished to output to redis.")
-      message.append(s"rcmd_bab_goods_*: $accumulator.")
-      message.append(s"插入redis rcmd_bab_goods_*: $accumulator2.")
+      Message.message.append(s"rcmd_bab_goods_*: $accumulator.\n")
+      Message.message.append(s"插入redis rcmd_bab_goods_*: $accumulator2.\n")
     }
     if (local) {
       logger.info("begin to output result to local redis.")
@@ -100,8 +99,7 @@ class BuyGoodsSimilarity extends Tool{
       result.take(50).foreach(println)
       logger.info("finished to output result to local redis.")
     }
-    Message.message.append(message)
-    sc.stop()
+//    sc.stop()
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {

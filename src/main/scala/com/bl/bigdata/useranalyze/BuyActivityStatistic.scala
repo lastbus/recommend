@@ -22,11 +22,9 @@ import redis.clients.jedis.Jedis
   */
 class BuyActivityStatistic extends Tool {
   private val logger = LogManager.getLogger(this.getClass.getName)
-  private val message = new StringBuilder
 
   override def run(args: Array[String]): Unit = {
-    message.clear()
-    message.append("上午 下午 晚上 购买类目:\n")
+    Message.message.append("上午 下午 晚上 购买类目:\n")
 
     val inputPath = ConfigurationBL.get("user.behavior.raw.data")
     val outputPath = ConfigurationBL.get("recmd.output")
@@ -90,19 +88,16 @@ class BuyActivityStatistic extends Tool {
       jedis.set("rcmd_topcategory_afternoon", noon)
       jedis.set("rcmd_topcategory_evening", evening)
       jedis.close()
-      message.append(s"运行成功:\n")
-      message.append(s"上午:$morning\n")
-      message.append(s"中午:$noon\n")
-      message.append(s"晚上:$evening\n")
+      Message.message.append(s"运行成功:\n")
+      Message.message.append(s"上午:$morning\n")
+      Message.message.append(s"中午:$noon\n")
+      Message.message.append(s"晚上:$evening\n")
     }
 
     if (local) {
       logger.info(s"上午：$morning\n下午：$noon\n晚上：$evening")
     }
-
-    Message.message.append(message)
-
-    sc.stop()
+//    sc.stop()
   }
 }
 

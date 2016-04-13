@@ -7,4 +7,12 @@ object Message {
 
   val message = new StringBuilder
 
+  def sendMail = {
+    MailServer.send(message.toString())
+  }
+
+  def addMessage(msg: String): Unit ={
+    message.append(msg)
+    message.append("\n\n")
+  }
 }

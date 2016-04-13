@@ -33,8 +33,8 @@ import scala.collection.mutable
   */
 class GoodsSimilarityInCate extends Tool with Serializable {
 
+  /** TF-IDF 的维度大小*/
   val featuresNum = 1 << 16
-  private val message = new StringBuilder()
 
   override def run(args: Array[String]): Unit = {
 
@@ -132,7 +132,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     if (redis) {
       val accumulator = sc.accumulator(0)
       saveToRedis(similarity, accumulator)
-      message.append(s"同类商品相似性:\n插入rcmd_sim_* :  $accumulator\n ")
+      Message.message.append(s"同类商品相似性:\n插入rcmd_sim_* :  $accumulator\n ")
     }
 
     if (hbase) {
@@ -160,9 +160,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
       similarity.first()
     }
 
-    Message.message.append(message)
-
-    sc.stop()
+//    sc.stop()
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {

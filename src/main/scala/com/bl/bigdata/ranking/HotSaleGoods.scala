@@ -24,11 +24,9 @@ import org.apache.spark.{Accumulator, SparkConf, SparkContext}
 class HotSaleGoods extends Tool {
 
   private val logger = LogManager.getLogger(this.getClass)
-  private val message = new StringBuilder
 
   override def run(args: Array[String]): Unit = {
-    message.clear()
-    message.append("品类热销商品：\n")
+    Message.message.append("品类热销商品：\n")
     val input = ConfigurationBL.get("user.order.raw.data")
     val output = ConfigurationBL.get("recmd.output")
     val hbase = output.contains("hbase")
@@ -77,8 +75,8 @@ class HotSaleGoods extends Tool {
 //      sc.toRedisKV(result)
       saveToRedis(result, accumulator2)
       logger.info("write finished.")
-      message.append(s"品类热销商品: $accumulator\n")
-      message.append(s"插入redis 品类热销商品: $accumulator2\n")
+      Message.message.append(s"品类热销商品: $accumulator\n")
+      Message.message.append(s"插入redis 品类热销商品: $accumulator2\n")
     }
 
     if (hbase){
@@ -119,9 +117,7 @@ class HotSaleGoods extends Tool {
 //    }
 
     result.unpersist()
-    Message.message.append(message)
-
-    sc.stop()
+//    sc.stop()
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
