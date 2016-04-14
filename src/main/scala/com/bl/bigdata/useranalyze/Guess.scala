@@ -15,7 +15,7 @@ import org.apache.spark.{Accumulator, SparkContext}
 /**
   * Created by MK33 on 2016/4/12.
   */
-class Guess extends Tool{
+class Guess extends Tool  {
 
   val cookiePath = "/user/als/cookie"
   val modelPath = "/user/als/model"
@@ -37,6 +37,7 @@ class Guess extends Tool{
 
     val count = sc.accumulator(0)
     saveToRedis(sc.parallelize(r.toSeq), count)
+    Message.addMessage(s"insert into redis :  ${count.value}")
     Message.sendMail
     SparkFactory.destroyResource()
   }
@@ -62,7 +63,7 @@ class Guess extends Tool{
     val start = getStartTime
     val sql = s"select cookie_id, behavior_type, goods_sid, dt " +
       s"from recommendation.user_behavior_raw_data " +
-      s"where dt >= $start"
+      s"where dt >= $start limit 1000"
     val rawRDD = ReadData.readHive(sc, sql)
 
     val ratingRDD = rawRDD.map{ case Item(Array(cookie_id, behavior_type, goods_sid, dt)) =>

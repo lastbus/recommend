@@ -2,13 +2,12 @@ package com.bl.bigdata.ranking
 
 import java.util
 
-import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import com.redislabs.provider.redis._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf, SparkContext}
+import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * 计算商品的属性，保存成redis中hash值。
@@ -19,10 +18,9 @@ class GoodsForSale extends Tool {
   private val logger = LogManager.getLogger(this.getClass.getName)
 
   override def run(args: Array[String]): Unit = {
-    Message.message.append("goods for sale:\n")
+    Message.addMessage("\ngoods for sale:\n")
     logger.info("execute goods for sale.")
-    val inputPath = ConfigurationBL.get("goods.for.sale.input.path")
-    val outputPath = ConfigurationBL.get("goods.for.sale.output.path")
+    val outputPath = ConfigurationBL.get("recmd.output")
     val local = outputPath.contains("local")
     val redis = outputPath.contains("redis")
 
@@ -35,18 +33,12 @@ class GoodsForSale extends Tool {
     }
     val sc = SparkFactory.getSparkContext()
     val hiveContext = new HiveContext(sc)
-//    val rawRDD = sc.textFile(inputPath)
     toRedis1(hiveContext)
     toRedis2(hiveContext)
     category(hiveContext)
-//    sc.stop()
   }
 
-  /**
-    *
-    * @param hiveContext
-    */
-  def toRedis1(hiveContext: HiveContext): Unit = {
+  def toRedis1(hiveContext: HiveContext) = {
     val sql = "select sid, category_id from recommendation.goods_avaialbe_for_sale"
 
 //    val readRDD = rdd.map(line => {
@@ -58,33 +50,30 @@ class GoodsForSale extends Tool {
     val sc = hiveContext.sparkContext
     val count1Accumulator = sc.accumulator(0)
     val count2Accumulator = sc.accumulator(0)
-    val goodsIDToCategoryIDRDD = readRDD map { case (goodsID, categoryID) => {
+    val goodsIDToCategoryIDRDD = readRDD map { case (goodsID, categoryID) =>
       count1Accumulator += 1
       ("rcmd_cate_" + goodsID, categoryID)
-    }}
+    }
 //    sc.toRedisKV(goodsIDToCategoryIDRDD)
     saveToRedis(goodsIDToCategoryIDRDD, count1Accumulator)
-    Message.message.append(s"插入 rcmd_cate_* : $count1Accumulator\n")
+    Message.addMessage(s"\t插入 rcmd_cate_* : $count1Accumulator\n")
 
     val categoryIDToGoodsID = readRDD.map(s => (s._2, Seq(s._1))).reduceByKey(_ ++ _)
-      .map { case (categoryID, goodsID) => {
+      .map { case (categoryID, goodsID) =>
         count2Accumulator += 1
         ("rcmd_cate_goods_" + categoryID, goodsID.mkString("#"))
-      }}
+      }
 //    sc.toRedisKV(categoryIDToGoodsID)
     saveToRedis(categoryIDToGoodsID, count2Accumulator)
-    Message.message.append(s"插入 rcmd_cate_goods_*: $count2Accumulator\n")
+    Message.addMessage(s"\t插入 rcmd_cate_goods_*: $count2Accumulator\n")
 
   }
 
   /**
     * 统计商品属性，保存在 redis 中。
- *
-    * @param hiveContext
+    * @param hiveContext 读取 hive 表
     */
-  def toRedis2(hiveContext: HiveContext): Unit = {
-    import com.bl.bigdata.util.MyRedisContext._
-    val delimiter = ConfigurationBL.get("goods.for.sale.delimiter", "\t")
+  def toRedis2(hiveContext: HiveContext) = {
     val sql = "select * from recommendation.goods_avaialbe_for_sale"
     val sc = hiveContext.sparkContext
     val accumulator = sc.accumulator(0)
@@ -94,26 +83,26 @@ class GoodsForSale extends Tool {
 //        (w(0), w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11))
 //      })
     val r = hiveContext.sql(sql).rdd.
-      map(row => (row.getString(0), row.getString(1), row.getString(2),
-                  row.getDouble(3).toString, row.getString(4), row.getString(5),
-                  row.getString(6), row.getLong(7).toString, row.getString(8),
-                  row.getDouble(9).toString, row.getString(10), row.getString(11)))
-      .distinct.map{ case (sid, mdm_goods_sid, goods_sales_name, goods_type, pro_sid, brand_sid, cn_name,
-    category_id, category_name, sale_price, pic_id, url) => {
-      val map = Map("sid" -> sid, "mdm_goods_sid" -> mdm_goods_sid, "goods_sales_name" -> goods_sales_name,
-        "goods_type" -> goods_type, "pro_sid" -> pro_sid, "brand_sid" -> brand_sid, "cn_name" -> cn_name,
-        "category_id" -> category_id, "category_name" -> category_name, "sale_price" -> sale_price,
-        "pic_sid" -> pic_id, "url" -> url)
-      val m = new util.HashMap[String, String]
-      for ((k, v) <- map) m.put(k, v)
-      ("rcmd_orig_" + sid, m)
-    }}
+  map(row => (row.getString(0), row.getString(1), row.getString(2),
+    row.getDouble(3).toString, row.getString(4), row.getString(5),
+    row.getString(6), row.getLong(7).toString, row.getString(8),
+    row.getDouble(9).toString, row.getString(10), row.getString(11)))
+  .distinct().map{ case (sid, mdm_goods_sid, goods_sales_name, goods_type, pro_sid, brand_sid, cn_name,
+    category_id, category_name, sale_price, pic_id, url) =>
+  val map = Map("sid" -> sid, "mdm_goods_sid" -> mdm_goods_sid, "goods_sales_name" -> goods_sales_name,
+    "goods_type" -> goods_type, "pro_sid" -> pro_sid, "brand_sid" -> brand_sid, "cn_name" -> cn_name,
+    "category_id" -> category_id, "category_name" -> category_name, "sale_price" -> sale_price,
+    "pic_sid" -> pic_id, "url" -> url)
+  val m = new util.HashMap[String, String]
+  for ((k, v) <- map) m.put(k, v)
+  ("rcmd_orig_" + sid, m)
+}
 //    sc.hashKVRDD2Redis(r)
     saveToRedisHash(r, accumulator)
-    Message.message.append(s"插入 rcmd_orig_*: $accumulator\n")
+    Message.addMessage(s"\t插入 rcmd_orig_*: $accumulator\n")
   }
 
-  def saveToRedisHash(rdd: RDD[(String, java.util.HashMap[String, String])], accumulator: Accumulator[Int]): Unit ={
+  def saveToRedisHash(rdd: RDD[(String, java.util.HashMap[String, String])], accumulator: Accumulator[Int]) ={
     rdd.foreachPartition(partition => {
       val jedis = RedisClient.pool.getResource
       partition.foreach(data => {
@@ -141,10 +130,10 @@ class GoodsForSale extends Tool {
     * 根据商品 id 得到它上一级品类ID；
     * 根据品类ID，得到所属的商品ID列表
  *
-    * @param hiveContext
+    * @param hiveContext 读取 hive 表
     */
   def category(hiveContext: HiveContext): Unit = {
-    val inputPath = ConfigurationBL.get("goods.for.sale.category.input.path")
+//    val inputPath = ConfigurationBL.get("goods.for.sale.category.input.path")
     val sc = hiveContext.sparkContext
     val accumulator1 = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
@@ -156,7 +145,7 @@ class GoodsForSale extends Tool {
 //      (w(0), w(size - 4), w(size - 2))})
     val readRDD = hiveContext.sql(sql).rdd.map(row =>
                   if (!row.anyNull) (row.getLong(0).toString, row.getLong(1).toString, row.getLong(2).toString) else null).filter(_ != null)
-      .map{ case (goodsID, parents, sub) => (if(goodsID == sub) parents else sub, Seq((goodsID)))}
+      .map{ case (goodsID, parents, sub) => (if(goodsID == sub) parents else sub, Seq(goodsID))}
       .distinct().reduceByKey(_ ++ _).map { case (parent, children) =>
       val size = children.length
       accumulator1 += size
@@ -168,9 +157,8 @@ class GoodsForSale extends Tool {
     }.flatMap(s => s)
 //    sc.toRedisKV(readRDD)
     saveToRedis(readRDD, accumulator2)
-//    message.append(s"插入 rcmd_parent_category_*: $accumulator1\n")
-    Message.message.append(s"插入 rcmd_parent_category_*: $accumulator2\n")
-    Message.message.append(s"插入 rcmd_subcategory_*: $accumulator2\n")
+    Message.addMessage(s"\t插入 rcmd_parent_category_*: $accumulator2\n")
+    Message.addMessage(s"\t插入 rcmd_subcategory_*: $accumulator2\n")
   }
 
 }
@@ -184,7 +172,5 @@ object GoodsForSale {
   def execute(args: Array[String]): Unit ={
     val test = new GoodsForSale with ToolRunner
     test.run(args)
-//    MailServer.send(test.message.toString)
-//    test.message.clear()
   }
 }

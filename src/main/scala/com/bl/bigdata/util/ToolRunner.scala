@@ -3,6 +3,7 @@ package com.bl.bigdata.util
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.mail.Message
 import org.apache.logging.log4j.LogManager
 
 /**
@@ -20,8 +21,7 @@ trait ToolRunner extends Tool {
       super.run(args)
     } catch {
       case e: Exception =>
-        println(e.getLocalizedMessage)
-        logger.info(s"encounter error, program exit: ${e.getMessage()}")
+        Message.addMessage(s"encounter error, program exit: ${e.getMessage()}")
     }
     val end = new Date
     logger.info(s"task ends at: ${sdf.format(end)}\n  time taken: ${(end.getTime - start.getTime) / 1000} s ")

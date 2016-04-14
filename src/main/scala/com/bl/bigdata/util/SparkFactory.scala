@@ -11,6 +11,7 @@ object SparkFactory {
   /** */
   def getSparkContext(appName: String, files: String*): SparkContext = {
     if (sc == null) {
+      ConfigurationBL.addResource("recmd-conf.xml")
       val sparkConf = new SparkConf().setAppName(appName)
       if (files.length > 0) {
         for (file <- files) ConfigurationBL.addResource(file)

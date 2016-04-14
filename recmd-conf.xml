@@ -107,14 +107,7 @@
         <name>buy.activity.category.topNum</name>
         <value>30</value>
     </property>
-    <property>
-        <name>browser.input.path</name>
-        <value>D:\2\user_behavior_raw_data</value>
-    </property>
-    <property>
-        <name>browser.output</name>
-        <value>local:re0dis</value>
-    </property>
+
 
     <property>
         <name>redis.host</name>

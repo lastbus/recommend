@@ -3,11 +3,11 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.logging.log4j.LogManager
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{SparkConf, SparkContext}
 import redis.clients.jedis.Jedis
 
 /**
@@ -24,9 +24,8 @@ class BuyActivityStatistic extends Tool {
   private val logger = LogManager.getLogger(this.getClass.getName)
 
   override def run(args: Array[String]): Unit = {
-    Message.message.append("上午 下午 晚上 购买类目:\n")
+    Message.addMessage("上午 下午 晚上 购买类目:\n")
 
-    val inputPath = ConfigurationBL.get("user.behavior.raw.data")
     val outputPath = ConfigurationBL.get("recmd.output")
     val local = outputPath.contains("local")
     val redis = outputPath.contains("redis")
@@ -64,22 +63,21 @@ class BuyActivityStatistic extends Tool {
       .filter{ case (category, time) => time >= "08" & time <= "12:00:00.0"}
       .map{ s => (s._1, 1)}
       .reduceByKey(_ + _)
-      .sortBy(_._2, false)
+      .sortBy(_._2, ascending = false)
       .take(num).map(_._1).mkString("#")
-    //      .map(("rcmd_topcategory_forenoon", _))
 
     val noon = rawRDD
       .filter{ case (category, time) => time >= "12" & time <= "18:00:00.0"}
       .map{ s => (s._1, 1)}
       .reduceByKey(_ + _)
-      .sortBy(_._2, false)
+      .sortBy(_._2, ascending = false)
       .take(num).map(_._1).mkString("#")
 
     val evening = rawRDD
       .filter{ case (category, time) => time >= "18" | time <= "08"}
       .map{ s => (s._1, 1)}
       .reduceByKey(_ + _)
-      .sortBy(_._2, false)
+      .sortBy(_._2, ascending = false)
       .take(num).map(_._1).mkString("#")
 
     if (redis){
@@ -88,16 +86,14 @@ class BuyActivityStatistic extends Tool {
       jedis.set("rcmd_topcategory_afternoon", noon)
       jedis.set("rcmd_topcategory_evening", evening)
       jedis.close()
-      Message.message.append(s"运行成功:\n")
-      Message.message.append(s"上午:$morning\n")
-      Message.message.append(s"中午:$noon\n")
-      Message.message.append(s"晚上:$evening\n")
+      Message.addMessage(s"\t上午:$morning\n")
+      Message.addMessage(s"\t中午:$noon\n")
+      Message.addMessage(s"\t晚上:$evening\n")
     }
 
     if (local) {
       logger.info(s"上午：$morning\n下午：$noon\n晚上：$evening")
     }
-//    sc.stop()
   }
 }
 
@@ -110,6 +106,5 @@ object BuyActivityStatistic {
   def execute(args: Array[String]): Unit ={
     val buyActivityStatistic = new BuyActivityStatistic with ToolRunner
     buyActivityStatistic.run(args)
-//    MailServer.send(buyActivityStatistic.message.toString())
   }
 }

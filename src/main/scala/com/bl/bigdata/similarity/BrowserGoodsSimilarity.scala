@@ -26,7 +26,7 @@ class BrowserGoodsSimilarity extends Tool {
   }
 
   override def run(args: Array[String]): Unit = {
-    Message.message.append("看了又看:\n")
+    Message.addMessage("看了又看:\n")
     val output = ConfigurationBL.get("recmd.output")
     val local = output.contains("local")
     val redis = output.contains("redis")
@@ -42,18 +42,19 @@ class BrowserGoodsSimilarity extends Tool {
 
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
-    val date = new Date
-    val start = sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
-    val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_s from recommendation.user_behavior_raw_data  where dt >= " + start
+    val date0 = new Date
+    val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
+    val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_sid  " +
+      "from recommendation.user_behavior_raw_data  where dt >= " + start
 
     val hiveContext = new HiveContext(sc)
     val rawRdd = hiveContext.sql(sql).rdd
       .map(row => (row.getString(0), row.getString(1), row.getString(2), row.getString(3), row.getString(4)))
       // 提取 user 浏览商品的行为
       .filter{ case (cookie, category, date, behaviorId, goodsId) => behaviorId == "1000"}
-      .map{ case (cookie, category, date, behaviorId, goodsId) =>
+      .map { case (cookie, category, date, behaviorId, goodsId) =>
         ((cookie, category, date.substring(0, date.indexOf(" "))), goodsId)
-      }.distinct
+      }.distinct()
       .filter(v => {
         val temp = v._1._2
         if (temp.trim.length == 0) false
@@ -70,20 +71,18 @@ class BrowserGoodsSimilarity extends Tool {
     val good2Freq = rawRdd.map(_._2).map((_, 1)).reduceByKey(_ + _)
     val good1Good2Similarity = tupleFreq.map { case ((good1, good2), freq) => (good2, (good1, freq)) }
       .join(good2Freq)
-      .map { case (good2, ((good1, freq), good2Freq)) => (good1, Seq((good2, freq.toDouble / good2Freq))) }
+      .map { case (good2, ((good1, freq), good2Freq1)) => (good1, Seq((good2, freq.toDouble / good2Freq1))) }
       .reduceByKey((s1, s2) => s1 ++ s2)
       .mapValues(v => { accumulator += 1; v.sortWith(_._2 > _._2).take(20) })
       .map { case (goods1, goods2) => ("rcmd_view_" + goods1, goods2.map(_._1).mkString("#")) }
-    // 保存到 redis 中
     rawRdd.unpersist()
+    // 保存到 redis 中
     if (redis) {
       saveToRedis(good1Good2Similarity, accumulator2)
-      Message.message.append(s"\t\trcmd_view_*: $accumulator\n")
-      Message.message.append(s"\t\t插入redis rcmd_view_*: $accumulator2\n")
-//      Message.message.append(message)
+      Message.addMessage(s"\t\trcmd_view_*: $accumulator\n")
+      Message.addMessage(s"\t\t插入redis rcmd_view_*: $accumulator2\n")
     }
-    if (local) good1Good2Similarity take (50) foreach println
-    sc.stop()
+    if (local) good1Good2Similarity take 50 foreach println
 
   }
 
@@ -105,15 +104,11 @@ class BrowserGoodsSimilarity extends Tool {
 object BrowserGoodsSimilarity {
 
   def main(args: Array[String]) {
-//    val goodsSimilarity = new BrowserGoodsSimilarity with ToolRunner
-//    goodsSimilarity.run(args)
-//    MailServer.send(goodsSimilarity.message.toString())
         execute(args)
   }
 
   def execute(args: Array[String]) = {
     val goodsSimilarity = new BrowserGoodsSimilarity with ToolRunner
     goodsSimilarity.run(args)
-//    MailServer.send(goodsSimilarity.message.toString())
   }
 }

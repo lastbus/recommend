@@ -3,13 +3,12 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkContext, SparkConf}
-import com.redislabs.provider.redis._
+import org.apache.spark.{Accumulator, SparkConf}
 /**
   * 计算用户购买的物品在一级类目下的关联度。
   * 物体 A 和 B 的关联度：
@@ -23,10 +22,8 @@ class BuyGoodsSimilarity extends Tool{
 
   override def run(args: Array[String]): Unit = {
     logger.info("starting to calculator buy goods similarity.")
-    Message.message.append("买了还买:\n")
+    Message.addMessage("\n买了还买:\n")
 
-    val inputPath = ConfigurationBL.get("user.behavior.raw.data")
-    val inputPath2 = ConfigurationBL.get("dim.category")
     val outPath = ConfigurationBL.get("recmd.output")
     val redis = outPath.contains("redis")
     val local = outPath.contains("local")
@@ -44,17 +41,19 @@ class BuyGoodsSimilarity extends Tool{
 
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
-    val date = new Date
-    val start = sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
+    val date0 = new Date
+    val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
     val sql = "select category_sid, cookie_id, event_date, behavior_type, goods_sid from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
 
     val hiveContext = new HiveContext(sc)
     val buyGoodsRDD = hiveContext.sql(sql).rdd
-      .map(row => (row.getString(0), (row.getString(1), { val t = row.getString(2); t.substring(0, t.indexOf(" "))},
+      .map(row => (row.getString(0), (row.getString(1), {
+        val t = row.getString(2); t.substring(0, t.indexOf(" "))
+      },
         row.getString(3), row.getString(4))))
-      .filter{ case (category, (cookie, date, behaviorID, goodsID)) => behaviorID.equals("4000")}
-      .map{case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID))}.distinct
+      .filter { case (category, (cookie, date, behaviorID, goodsID)) => behaviorID.equals("4000") }
+      .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }.distinct()
 
     val sql2 = "select category_id, level2_id from recommendation.dim_category"
     val categoriesRDD = hiveContext.sql(sql2).rdd.map(row => (row.getLong(0), row.getLong(1))).
@@ -73,9 +72,6 @@ class BuyGoodsSimilarity extends Tool{
       .map{ case (category, ((cookie, date, goodsID), kind)) => ((cookie, date, kind), goodsID)}
     // 统计每种物品的购买数量
     val buyCount = buyGoodsKindRDD.map{ case ((cookie, date, kind), goodsID) => (goodsID, 1)}.reduceByKey(_ + _)
-//    val c = buyGoodsKindRDD.map(s=> (s._2, s._1)).join(buyCount).
-//      map{ case (goodsID, ((cookie, date, kind), count)) => ((cookie, date, kind), (goodsID, count))}
-//    val d = buyGoodsKindRDD.join(c).map{ case ((cookie, date, kind), (goodsID, goods))}
     // 计算用户购买物品在同一类别下的关联度
     val result0 = buyGoodsKindRDD.join(buyGoodsKindRDD)
       .filter{ case ((cookie, date, kind), (goodsID1, goodsID2)) => goodsID1 != goodsID2}
@@ -90,8 +86,8 @@ class BuyGoodsSimilarity extends Tool{
       logger.info(s"output result to redis, host: ${ConfigurationBL.get("redis.host")}.")
       saveToRedis(sorting.map(s => ("rcmd_bab_goods_" + s._1, s._2)), accumulator2)
       logger.info("finished to output to redis.")
-      Message.message.append(s"rcmd_bab_goods_*: $accumulator.\n")
-      Message.message.append(s"插入redis rcmd_bab_goods_*: $accumulator2.\n")
+      Message.addMessage(s"\trcmd_bab_goods_*: $accumulator.\n")
+      Message.addMessage(s"\t插入 redis rcmd_bab_goods_*: $accumulator2.\n")
     }
     if (local) {
       logger.info("begin to output result to local redis.")
@@ -99,7 +95,6 @@ class BuyGoodsSimilarity extends Tool{
       result.take(50).foreach(println)
       logger.info("finished to output result to local redis.")
     }
-//    sc.stop()
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
@@ -123,6 +118,5 @@ object BuyGoodsSimilarity {
   def execute(args: Array[String]): Unit ={
     val buyGoodsSimilarity = new BuyGoodsSimilarity with ToolRunner
     buyGoodsSimilarity.run(args)
-//    MailServer.send(buyGoodsSimilarity.message.toString())
   }
 }

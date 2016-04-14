@@ -3,13 +3,12 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.mail.{Message, MailServer}
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkContext, SparkConf}
-import com.redislabs.provider.redis._
+import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * Created by MK33 on 2016/3/24.
@@ -19,9 +18,8 @@ class BrowserNotBuy extends Tool {
   private val logger = LogManager.getLogger(this.getClass.getName)
 
   override def run(args: Array[String]): Unit ={
-    Message.message.append("最近两个月浏览未购买商品 按时间排序:\n")
+    Message.addMessage("\n最近两个月浏览未购买商品 按时间排序:\n")
 
-    val input = ConfigurationBL.get("user.behavior.raw.data")
     val output = ConfigurationBL.get("recmd.output")
     val local = output.contains("local")
     val redis = output.contains("redis")
@@ -38,8 +36,8 @@ class BrowserNotBuy extends Tool {
 
 
     val sdf = new SimpleDateFormat("yyyyMMdd")
-    val date = new Date
-    val start = sdf.format(new Date(date.getTime - 24000L * 3600 * 60))
+    val date0 = new Date
+    val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * 60))
     val sql = "select cookie_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
 
@@ -58,7 +56,8 @@ class BrowserNotBuy extends Tool {
 
     val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000")}
     val buyRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("4000")}
-    val browserNotBuy = browserRDD subtract buyRDD map (s => (s._1._1, Seq(s._3))) reduceByKey ((s1,s2) => s1 ++ s2) map (item => {accumulator += 1;
+    val browserNotBuy = browserRDD subtract buyRDD map (s => (s._1._1, Seq(s._3))) reduceByKey ((s1,s2) => s1 ++ s2) map (item => {
+      accumulator += 1
       ("rcmd_cookieid_view_" + item._1, item._2.distinct.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).mkString(",")).mkString("#"))})
 
     if (redis) {
@@ -66,11 +65,10 @@ class BrowserNotBuy extends Tool {
 //      sc toRedisKV browserNotBuy
       saveToRedis(browserNotBuy, accumulator2)
       logger.info("finished to output data to redis.")
-      Message.message.append(s"rcmd_cookieid_view_*: $accumulator\n")
-      Message.message.append(s"插入redis rcmd_cookieid_view_*: $accumulator2\n")
+      Message.addMessage(s"\trcmd_cookieid_view_*: $accumulator\n")
+      Message.addMessage(s"\t插入redis rcmd_cookieid_view_*: $accumulator2\n")
     }
     if (local) browserNotBuy.take(50).foreach(logger.info(_))
-//    sc.stop()
   }
   /**
     * 将输入的 Array[(category ID, goods ID)] 转换为
@@ -103,6 +101,5 @@ object BrowserNotBuy {
   def execute(args:Array[String]): Unit ={
     val browserNotBuy = new BrowserNotBuy with ToolRunner
     browserNotBuy.run(args)
-//    MailServer.send(browserNotBuy.message.toString())
   }
 }

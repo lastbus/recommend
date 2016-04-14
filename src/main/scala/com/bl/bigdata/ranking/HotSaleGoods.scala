@@ -14,7 +14,7 @@ import org.apache.hadoop.mapreduce.Job
 import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf, SparkContext}
+import org.apache.spark.{Accumulator, SparkConf}
 
 /**
  * 销量排行：
@@ -26,8 +26,7 @@ class HotSaleGoods extends Tool {
   private val logger = LogManager.getLogger(this.getClass)
 
   override def run(args: Array[String]): Unit = {
-    Message.message.append("品类热销商品：\n")
-    val input = ConfigurationBL.get("user.order.raw.data")
+    Message.addMessage("\n品类热销商品：\n")
     val output = ConfigurationBL.get("recmd.output")
     val hbase = output.contains("hbase")
     val redis = output.contains("redis")
@@ -75,8 +74,8 @@ class HotSaleGoods extends Tool {
 //      sc.toRedisKV(result)
       saveToRedis(result, accumulator2)
       logger.info("write finished.")
-      Message.message.append(s"品类热销商品: $accumulator\n")
-      Message.message.append(s"插入redis 品类热销商品: $accumulator2\n")
+      Message.addMessage(s"\t品类热销商品: $accumulator\n")
+      Message.addMessage(s"\t插入redis 品类热销商品: $accumulator2\n")
     }
 
     if (hbase){
@@ -102,22 +101,7 @@ class HotSaleGoods extends Tool {
       }}.saveAsNewAPIHadoopDataset(job.getConfiguration)
 
     }
-//    if( local) {
-//      val jedisPool = new JedisPool(new JedisPoolConfig, "10.201.128.216", 6379) with Serializable
-//      logger.info("begin to write to local")
-//      var i = 0
-//      result.collect().foreach { case (category, ranking) =>
-//        val jedis = jedisPool.getResource
-//        jedis.set("rcmd_cate_hotsale_" + category, ranking)
-//        jedis.close()
-//        i += 1
-//      }
-//      message.append(s"本地插入redis hot sale 商品: $i\n")
-//      logger.info(s"$i key-values are written to local finished.")
-//    }
-
     result.unpersist()
-//    sc.stop()
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
@@ -141,7 +125,6 @@ object HotSaleGoods {
   def execute(args: Array[String]): Unit = {
     val hotSale = new HotSaleGoods with ToolRunner
     hotSale.run(args)
-//    MailServer.send(hotSale.message.toString())
   }
 
   /**

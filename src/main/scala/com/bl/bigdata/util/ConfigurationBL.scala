@@ -13,7 +13,7 @@ object ConfigurationBL extends ConfigurableBL {
 
   private val logger = LogManager.getLogger(this.getClass)
   private val setting = new ConcurrentHashMap[String, String]
-  
+  addResource("recmd-conf.xml")
 
   /** Get a parameter as an Option */
   def getOption(key: String): Option[String] = {

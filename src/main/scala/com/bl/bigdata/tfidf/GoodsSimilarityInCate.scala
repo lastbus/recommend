@@ -1,21 +1,19 @@
 package com.bl.bigdata.tfidf
 
-import com.bl.bigdata.mail.{Message, MailServer}
+import breeze.linalg.{SparseVector => BSV, norm}
+import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.{Put, Result}
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
-import org.apache.spark.rdd.RDD
-import breeze.linalg.{SparseVector => BSV, norm}
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.mllib.linalg.{SparseVector => SV, _}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf, SparkContext}
-import com.redislabs.provider.redis._
+import org.apache.spark.{Accumulator, SparkConf}
 
-import scala.StringBuilder
 import scala.collection.mutable
 
 
@@ -37,8 +35,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
   val featuresNum = 1 << 16
 
   override def run(args: Array[String]): Unit = {
-
-    val inputPath = ConfigurationBL.get("product.properties.raw.data")
+    Message.addMessage("\n同类商品属性的相似性：\n")
     val output = ConfigurationBL.get("recmd.output")
     val local = output.contains("local")
     val redis = output.contains("redis")
@@ -47,7 +44,6 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     val table = ""
     val columnFamily = ""
     val columnName = ""
-    val delimiter = "\t"
 
     val sparkConf = new SparkConf().setAppName(this.getClass.getName)
     if (local) sparkConf.setMaster("local[*]")
@@ -84,7 +80,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
           sortedSeq(size * 6 / 10), sortedSeq(size * 8 / 10)))
       }
 
-    //    categoryRDD.take(50).foreach(println)
+    // categoryRDD.take(50).foreach(println)
     val tf = rawRDD.map { case (goodsID, itemNo, category, brand, attribute, price) =>
       (goodsID, (itemNo, category, brand, Seq(attribute), price))
     }
@@ -132,7 +128,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     if (redis) {
       val accumulator = sc.accumulator(0)
       saveToRedis(similarity, accumulator)
-      Message.message.append(s"同类商品相似性:\n插入rcmd_sim_* :  $accumulator\n ")
+      Message.addMessage(s"\t插入rcmd_sim_* :  $accumulator\n ")
     }
 
     if (hbase) {
@@ -160,7 +156,6 @@ class GoodsSimilarityInCate extends Tool with Serializable {
       similarity.first()
     }
 
-//    sc.stop()
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
@@ -176,7 +171,6 @@ class GoodsSimilarityInCate extends Tool with Serializable {
 
   /**
     * 计算商品的属性和价格的 TF
- *
     * @param array 属性集
     * @param price 价格
     * @param priceArray 价格的等级
@@ -211,13 +205,13 @@ class GoodsSimilarityInCate extends Tool with Serializable {
 }
 
 object GoodsSimilarityInCate extends Serializable {
-  def main(args: Array[String]) {
+
+  def main(args: Array[String]) = {
     execute(args)
   }
 
-  def execute(args: Array[String]): Unit ={
+  def execute(args: Array[String]) = {
     val goodsSimilarity = new GoodsSimilarityInCate with  ToolRunner
     goodsSimilarity.run(args)
-//    MailServer.send(goodsSimilarity.message.toString())
   }
 }
