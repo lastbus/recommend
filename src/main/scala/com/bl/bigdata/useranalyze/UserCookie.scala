@@ -13,7 +13,7 @@ class UserCookie extends Tool {
 
   override def run(args: Array[String]): Unit = {
     Message.addMessage("\n将用户id 和 cookie id 导入 redis：\n")
-    val sc = SparkFactory.getSparkContext()
+    val sc = SparkFactory.getSparkContext
     val hiveContext = new HiveContext(sc)
     val sql = "select registration_id, cookie_id, event_date from recommendation.memberid_cookieid"
     val rawRDD = hiveContext.sql(sql).rdd.map(row => (row.getString(0), row.getString(1), row.getString(2)))

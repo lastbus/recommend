@@ -29,7 +29,7 @@ class SeeBuyGoodsSimilarity extends Tool {
       for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
         sparkConf.set(k, v)
 
-    val sc = SparkFactory.getSparkContext()
+    val sc = SparkFactory.getSparkContext
 
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")

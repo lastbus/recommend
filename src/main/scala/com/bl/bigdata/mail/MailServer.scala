@@ -12,7 +12,6 @@ import org.apache.logging.log4j.LogManager
   */
 object MailServer {
   private val logger = LogManager.getLogger(this.getClass.getName)
-  val to = ConfigurationBL.get("mail.to").split(",")
 
   def send(message: String) = {
     val email = getEmail(ConfigurationBL.get("mail.type"))
@@ -36,16 +35,13 @@ object MailServer {
       email.setHostName("smtp.sina.com")
       email.setAuthenticator(new DefaultAuthenticator("disanyuzhou2016@sina.com", "sh1@bl2$3"))
       email.setFrom("disanyuzhou2016@sina.com")
-      for (who <- to) email.addTo(who)
-//      email.addTo("Ke.Ma@bl.com")
-//      email.addTo("JuTao.Hao@bl.com")
+      for (who <- ConfigurationBL.get("mail.to").split(",")) email.addTo(who)
       email
     } else {
       email.setHostName("mail.bl.com")
       email.setAuthenticator(new DefaultAuthenticator("MK33", "Make819307659"))
       email.setFrom("Ke.Ma@bl.com")
-      email.addTo("Ke.Ma@bl.com")
-      email.addTo("JuTao.Hao@bl.com")
+      for (who <- ConfigurationBL.get("mail.to").split(",")) email.addTo(who)
       email
     }
   }

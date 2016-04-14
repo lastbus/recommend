@@ -37,7 +37,7 @@ class BuyActivityStatistic extends Tool {
       for ((key, value) <- ConfigurationBL.getAll if key.startsWith("redis."))
         sparkConf.set(key, value)
 
-    val sc = SparkFactory.getSparkContext()
+    val sc = SparkFactory.getSparkContext
 
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")

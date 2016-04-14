@@ -40,7 +40,7 @@ class HotSaleGoods extends Tool {
     if (redis)
       for ((key, value) <- ConfigurationBL.getAll.filter(_._1.startsWith("redis.")))
         sparkConf.set(key, value)
-    val sc = SparkFactory.getSparkContext()
+    val sc = SparkFactory.getSparkContext
 
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)

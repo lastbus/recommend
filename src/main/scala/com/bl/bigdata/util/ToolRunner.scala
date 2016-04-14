@@ -16,7 +16,7 @@ trait ToolRunner extends Tool {
     val start = new Date
     val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
     logger.info(s"task begins at: ${sdf.format(start)}")
-    ConfigurationBL.addResource("recmd-conf.xml")
+    ConfigurationBL.init()
     try {
       super.run(args)
     } catch {

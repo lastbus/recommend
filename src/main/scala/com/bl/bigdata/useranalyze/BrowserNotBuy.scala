@@ -30,7 +30,7 @@ class BrowserNotBuy extends Tool {
       for ((key, value) <- ConfigurationBL.getAll if key.contains("redis."))
         sparkConf.set(key, value)
     }
-    val sc = SparkFactory.getSparkContext()
+    val sc = SparkFactory.getSparkContext
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 

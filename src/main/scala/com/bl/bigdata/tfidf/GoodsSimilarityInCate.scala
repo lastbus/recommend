@@ -50,7 +50,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     if (redis)
       for ((k, v) <- ConfigurationBL.getAll)
         sparkConf.set(k, v)
-    val sc = SparkFactory.getSparkContext()
+    val sc = SparkFactory.getSparkContext
 
     val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
       " from recommendation.product_properties_raw_data"

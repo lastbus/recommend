@@ -13,7 +13,7 @@ object ConfigurationBL extends ConfigurableBL {
 
   private val logger = LogManager.getLogger(this.getClass)
   private val setting = new ConcurrentHashMap[String, String]
-  addResource("recmd-conf.xml")
+  private var load: Boolean = false
 
   /** Get a parameter as an Option */
   def getOption(key: String): Option[String] = {
@@ -46,6 +46,12 @@ object ConfigurationBL extends ConfigurableBL {
           logger.warn(s"$key's origin value ${setting.get(key)} is overriding by $value.")
         setting.put(key, value)
       }
+  }
 
+  def init(): Unit = {
+    if( !load ) {
+      addResource("recmd-conf.xml")
+      load = true
+    }
   }
 }

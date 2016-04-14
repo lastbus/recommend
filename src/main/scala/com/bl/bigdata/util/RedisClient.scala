@@ -7,12 +7,12 @@ import redis.clients.jedis.JedisPool
   * Created by MK33 on 2016/4/7.
   */
 object RedisClient extends Serializable {
-  val redisHost = "10.201.48.13"
-  val redisPort = 6379
-  val redisTimeout = 10000
+
   val conf = new GenericObjectPoolConfig
   conf.setMaxTotal(100)
-  lazy val pool = new JedisPool(conf, redisHost, redisPort, redisTimeout)
+  lazy val pool = new JedisPool(conf,  "10.201.128.216",
+                                        ConfigurationBL.get("redis.port", "6379").toInt,
+                                        ConfigurationBL.get("redis.timeout", "10000").toInt)
 
   lazy val hook = new Thread {
     override def run = {

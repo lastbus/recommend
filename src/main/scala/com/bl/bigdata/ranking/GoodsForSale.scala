@@ -31,7 +31,7 @@ class GoodsForSale extends Tool {
       for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
         sparkConf.set(k, v)
     }
-    val sc = SparkFactory.getSparkContext()
+    val sc = SparkFactory.getSparkContext
     val hiveContext = new HiveContext(sc)
     toRedis1(hiveContext)
     toRedis2(hiveContext)

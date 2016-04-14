@@ -26,7 +26,7 @@ class GuessWhatYouLike extends Tool with SparkEnv{
     val numIter = PropertyUtil.get("guesswhatyoulike.number.iterator").toInt
 
     override def run(args: Array[String]): Unit = {
-        val sc = SparkFactory.getSparkContext()
+        val sc = SparkFactory.getSparkContext
         val limit = ConfigurationBL.get("day.before.today", "90").toInt
         val sdf = new SimpleDateFormat("yyyyMMdd")
         val date = new Date

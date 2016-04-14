@@ -73,7 +73,7 @@ class Main extends Tool {
     val t = (date2.getTime - date.getTime) / 1000
     Message.addMessage(s"=============  time taken： $t s =================")
     Message.sendMail
-    SparkFactory.destroyResource()
+//    SparkFactory.destroyResource()
 
   }
 }

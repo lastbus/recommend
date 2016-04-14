@@ -2,6 +2,8 @@ package com.bl.bigdata.util
 
 import org.apache.spark.{SparkContext, SparkConf}
 
+import scala.xml.XML
+
 /**
   * Created by MK33 on 2016/4/11.
   */
@@ -9,24 +11,30 @@ object SparkFactory {
   private[this] var sc: SparkContext = _
 
   /** */
-  def getSparkContext(appName: String, files: String*): SparkContext = {
+  def getSparkContext(appName: String): SparkContext = {
     if (sc == null) {
-      ConfigurationBL.addResource("recmd-conf.xml")
       val sparkConf = new SparkConf().setAppName(appName)
-      if (files.length > 0) {
-        for (file <- files) ConfigurationBL.addResource(file)
-        for ((k, v) <- ConfigurationBL.getAll
-             if k.startsWith("spark.") || k.startsWith("redis.")) sparkConf.set(k, v)
-      }
+      val confFile = ConfigurationBL.get("extra.configuration.file", "")
+      // 加载hadoop其他配置文件，比如 hbase-site.xml、hive-site.xml等等符合hadoop配置文件规则的xml文件
+      if ( !confFile.isEmpty )
+        for ( conf <- confFile.split(":") ) {
+          val xml = XML.load(conf)
+          val properties = xml \ "property"
+          for (property <- properties)
+            sparkConf.set((property \ "name").text, (property \ "value").text)
+        }
       sc = new SparkContext(sparkConf)
+      sys.addShutdownHook(new Thread {
+        override def run(): Unit = destroyResource()
+      })
       sc
     } else {
-      // 如果sc已经初始化了，那么参数就没法传递给spark了
+      // 如果sc已经初始化了，那么传递给spark集群的参数则对集群没有影响了
       sc
     }
   }
 
-    def getSparkContext(): SparkContext = {
+    def getSparkContext: SparkContext = {
       if (sc == null) getSparkContext("recommend")
       else sc
     }
