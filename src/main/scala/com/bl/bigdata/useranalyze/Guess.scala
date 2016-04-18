@@ -8,9 +8,12 @@ import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.linalg.distributed.{IndexedRow, IndexedRowMatrix, MatrixEntry}
 import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rating}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{Accumulator, SparkContext}
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.{Accumulator, HashPartitioner, SparkContext}
 
 /**
   * Created by MK33 on 2016/4/12.
@@ -23,22 +26,18 @@ class Guess extends Tool  {
   override def run(args: Array[String]): Unit = {
 
     val sc = SparkFactory.getSparkContext("ALS model")
-    val model = trainModel(sc)
-    val r = ReadData.readLocal(sc, cookiePath).collect()
-      .map { case Item(Array(cookie, index)) =>(cookie, index)}.toMap.
-      map{ case (cookie, index) =>
-        val t = try {
-          model.recommendProducts(index.toInt, 20)
-        }catch {
-          case ex:NoSuchElementException =>
-            Array(Rating(0, 0, 0.0))
-        }
-      ("rcmd_guess_" + cookie, t.map(_.product.toString).mkString("#"))}
 
-    val count = sc.accumulator(0)
-    saveToRedis(sc.parallelize(r.toSeq), count)
-    Message.addMessage(s"insert into redis :  ${count.value}")
-    Message.sendMail
+    val model = trainModel(sc)
+//    val start = getStartTime
+//
+//    val rawRDD = ReadData.readHive(sc, sql)
+//    val cookieIndexUser = ReadData.readLocal(sc, cookiePath)
+//
+//
+//    val count = sc.accumulator(0)
+//    saveToRedis(sc.parallelize(r.toSeq), count)
+//    Message.addMessage(s"insert into redis :  ${count.value}")
+//    Message.sendMail
     SparkFactory.destroyResource()
   }
 
@@ -60,18 +59,20 @@ class Guess extends Tool  {
   }
 
   def trainModel(sc: SparkContext): MatrixFactorizationModel = {
+
     val start = getStartTime
     val sql = s"select cookie_id, behavior_type, goods_sid, dt " +
       s"from recommendation.user_behavior_raw_data " +
-      s"where dt >= $start limit 1000"
+      s"where dt >= $start "
     val rawRDD = ReadData.readHive(sc, sql)
 
     val ratingRDD = rawRDD.map{ case Item(Array(cookie_id, behavior_type, goods_sid, dt)) =>
-      (cookie_id, (behavior_type, goods_sid, dt)) }
+      (cookie_id, (behavior_type, goods_sid, dt)) }.filter(s =>
+      s._2._1 == "1000" || s._2._1 == "2000" ||s._2._1 == "3000" || s._2._1 == "4000" ).partitionBy(new HashPartitioner(8))
+    ratingRDD.persist()
 
     val nowMills = new Date().getTime
     val cookieIndex = ratingRDD.map(_._1).distinct().zipWithUniqueId()
-    cookieIndex.cache()
 
     val fs = FileSystem.get(new Configuration())
     if ( fs.exists(new Path(cookiePath))) fs.delete(new Path(cookiePath), true)
@@ -79,18 +80,15 @@ class Guess extends Tool  {
     Message.addMessage(s"save cookie to path: $cookiePath")
     Message.sendMail
 
-
-    val trainRDD = ratingRDD.join(cookieIndex).filter(s =>
-        s._2._1._1 == "1000" || s._2._1._1 == "2000" ||s._2._1._1 == "3000" || s._2._1._1 == "4000" )
+    val trainRDD = ratingRDD.join(cookieIndex)
       .map{ case (cookie, ((behavior, goods, dt), index)) =>
       ((index.toInt, goods.toInt), getRating(behavior, dt, nowMills)) }.reduceByKey(_ + _)
       .map{ case ((index, goods), rating) => Rating(index, goods, rating)}
-    cookieIndex.unpersist()
 
     trainRDD.cache()
     Message.addMessage("trainRDD count: " + trainRDD.count())
     Message.sendMail
-    val model = ALS.train(trainRDD, 1, 1, 0.01)
+    val model = ALS.train(trainRDD, 10, 10, 0.01)
 
     val usersProducts = trainRDD.map{ case Rating(user, product, rating) => (user, product) }
 
@@ -104,14 +102,44 @@ class Guess extends Tool  {
       err * err
     }.mean()
 
-    Message.message.append(s"ALS Mean Squared Error =  $MSE \n\n")
+    Message.addMessage(s"ALS Mean Squared Error =  $MSE \n\n")
 
     if (fs.exists(new Path(modelPath))) fs.delete(new Path(modelPath), true)
     fs.close()
     model.save(sc, modelPath)
     Message.addMessage(s"save als model to $modelPath \n\n")
     Message.sendMail
+
+    val userIndexAndProd = getAllModel(model)
+
+    val rcmd = cookieIndex.map(s => (s._2, s._1)).join(userIndexAndProd).map(s => ("rcmd_guess_" + s._2._1, s._2._2))
+
+
+    val count = sc.accumulator(0)
+    saveToRedis(rcmd, count)
+    Message.addMessage(s"insert into redis :  ${count.value}")
+    Message.sendMail
+    ratingRDD.unpersist()
     model
+  }
+
+  def getAllModel(model: MatrixFactorizationModel): RDD[(Long, String)] = {
+
+    val userFeature = model.userFeatures
+      .map{ case(userIndex, rating) => IndexedRow(userIndex, Vectors.dense(rating))}
+    val userBlock = new IndexedRowMatrix(userFeature).toCoordinateMatrix().toBlockMatrix()
+    userBlock.persist(StorageLevel.MEMORY_AND_DISK)
+
+    val productFeature = model.productFeatures
+      .map{ case(productIndex, rating) => IndexedRow(productIndex, Vectors.dense(rating))}
+    val productBlock = new IndexedRowMatrix(productFeature).toCoordinateMatrix().transpose().toBlockMatrix()
+    productBlock.persist(StorageLevel.MEMORY_AND_DISK)
+
+    val u = userBlock.multiply(productBlock)
+                      .toCoordinateMatrix().entries
+                      .map{ case MatrixEntry(user, product, rating) => (user,Seq((product, rating)))}
+                      .reduceByKey(_ ++ _).map(s => (s._1, s._2.sortWith(_._2 > _._2).take(20).mkString("#")))
+    u
   }
 
   def hasFile(file: String): Boolean ={
@@ -140,8 +168,8 @@ class Guess extends Tool  {
     rdd.foreachPartition(partition => {
       val jedis = RedisClient.pool.getResource
       partition.foreach(s => {
-        accumulator += 1
         jedis.set(s._1, s._2)
+        accumulator += 1
       })
       jedis.close()
     })
