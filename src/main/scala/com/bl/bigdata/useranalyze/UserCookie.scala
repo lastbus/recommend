@@ -19,11 +19,12 @@ class UserCookie extends Tool {
     val rawRDD = hiveContext.sql(sql).rdd.map(row => (row.getString(0), row.getString(1), row.getString(2)))
 
     val r = rawRDD.map(r => (r._1, Seq((r._2, r._3)))).reduceByKey(_ ++ _)
-      .map(r => ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).mkString("#")))
+      .map(r => ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).distinct.mkString("#")))
     val count = sc.accumulator(0)
     saveListToRedis(r, count)
     Message.addMessage(s"\t导入 redis 条数： $count \n")
   }
+
 
 
   def saveListToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
