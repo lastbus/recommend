@@ -24,9 +24,9 @@ object SparkFactory {
             sparkConf.set((property \ "name").text, (property \ "value").text)
         }
       sc = new SparkContext(sparkConf)
-      sys.addShutdownHook(new Thread {
-        override def run(): Unit = destroyResource()
-      })
+//      sys.addShutdownHook(new Thread {
+//        override def run() = destroyResource()
+//      })
       sc
     } else {
       // 如果sc已经初始化了，那么传递给spark集群的参数则对集群没有影响了
