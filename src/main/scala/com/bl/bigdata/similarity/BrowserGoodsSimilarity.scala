@@ -97,8 +97,6 @@ class BrowserGoodsSimilarity extends Tool {
     })
   }
 
-
-
 }
 
 object BrowserGoodsSimilarity {

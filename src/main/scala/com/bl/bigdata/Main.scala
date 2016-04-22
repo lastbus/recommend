@@ -5,6 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.bl.bigdata.mail.Message
+import com.bl.bigdata.product.GoodsNewArrival
 import com.bl.bigdata.ranking.{GoodsForSale, HotSaleGoods}
 import com.bl.bigdata.similarity.{BrowserGoodsSimilarity, BuyGoodsSimilarity, SeeBuyGoodsSimilarity}
 import com.bl.bigdata.tfidf.GoodsSimilarityInCate
@@ -42,8 +43,9 @@ class Main extends Tool {
       list += new BrowserNotBuy with ToolRunner // 最近两个月浏览未购买商品 按时间排序
       list += new HotSaleGoods with ToolRunner // 品类热销商品
       list += new GoodsForSale with ToolRunner // goods for sale
-      list += new GoodsSimilarityInCate with ToolRunner // 同一类别商品的相似度
       list += new UserCookie with ToolRunner // 将用户 ID 和 cookieID 导入到 redis
+      list += new GoodsNewArrival with ToolRunner // 新上线商品
+      list += new GoodsSimilarityInCate with ToolRunner // 同一类别商品的相似度
     } else {
       val map: Map[String, Tool] = Map("BrowserGoodsSimilarity".toLowerCase -> new BrowserGoodsSimilarity with ToolRunner,
                             "SeeBuyGoodsSimilarity".toLowerCase -> new SeeBuyGoodsSimilarity with ToolRunner,
@@ -54,13 +56,15 @@ class Main extends Tool {
                             "HotSaleGoods".toLowerCase -> new HotSaleGoods with ToolRunner,
                             "GoodsForSale".toLowerCase -> new GoodsForSale with ToolRunner,
                             "GoodsSimilarityInCate".toLowerCase -> new GoodsSimilarityInCate with ToolRunner,
-                            "UserCookie".toLowerCase -> new UserCookie with ToolRunner)
+                            "UserCookie".toLowerCase -> new UserCookie with ToolRunner,
+                            "GoodsNewArrival".toLowerCase -> new GoodsNewArrival with ToolRunner)
       for (arg <- args; key = arg.toLowerCase if map.contains(key)) list += map(key)
     }
     Message.addMessage(s"there are ${list.size} tasks. \n\n")
 
     for (tool <- list) {
       try {
+        //TODO 启用另一线程执行任务，主程序计时，超时就 kill 掉，执行下一个任务。
         tool.run(args)
       } catch {
         case e: Exception =>

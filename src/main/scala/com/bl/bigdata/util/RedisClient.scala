@@ -7,6 +7,7 @@ import redis.clients.jedis.JedisPool
   * Created by MK33 on 2016/4/7.
   */
 object RedisClient extends Serializable {
+  //TODO 把 redis 的配置放在配置文件中
 
   val conf = new GenericObjectPoolConfig
   conf.setMaxTotal(100)
