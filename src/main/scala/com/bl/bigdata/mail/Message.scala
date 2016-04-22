@@ -13,6 +13,9 @@ object Message {
 
   def addMessage(msg: String): Unit ={
     message.append(msg)
-    message.append("\n\n")
+    message.append("\n")
   }
+
+  def clear = message.clear()
+
 }
