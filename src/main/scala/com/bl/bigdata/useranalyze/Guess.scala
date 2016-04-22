@@ -13,6 +13,7 @@ import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rat
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{Accumulator, SparkContext}
+import scala.collection.JavaConversions._
 
 /**
  *
@@ -120,7 +121,7 @@ class Guess extends Tool {
 //      return null
     }
     // ============= 以下为计算user-item矩阵，其实可以考虑用笛卡尔积计算而不是用spark的矩阵，以后再说吧。=============
-    val initValue = new Array[(Long, Double)](20).map(s =>(-1L,0.0))
+    val initValue = new Array[(Long, Double)](30).map(s =>(-1L,0.0))
     val aggregate = (init: Array[(Long, Double)], toBeAdd: (Long, Double)) => insertSort2(init, toBeAdd)
     val combine = (op1: Array[(Long, Double)], op2: Array[(Long, Double)]) => {for (v <- op2) insertSort2(op1, v); op1}
 
@@ -149,8 +150,9 @@ class Guess extends Tool {
 //    replaceProduct.checkpoint() //可以考虑把这个结果 checkpoint 起来
     val replaceItemIndex = cookieIndex.map(s=>(s._2, s._1)).join(replaceProduct)
       .map{ case (userIndex, (user, (product, rating))) => (user, Seq((product, rating)))}
-      .reduceByKey(_ ++ _).map( s => ("rcmd_guess_" + s._1, s._2.sortWith(_._2 > _._2).map(_._1)))
-    val userItemTupleString = replaceItemIndex.mapValues(p => p.mkString("#"))
+      .reduceByKey(_ ++ _).map( s => (s._1, s._2.map(s0 => (s0._1, s0._2.toString)).toMap))
+
+//    val userItemTupleString = replaceItemIndex.mapValues(p => p.mkString("#"))
 //    userItemTupleString.checkpoint() //把它checkpoint 起来，及时导入redis失败，那么也可以重新导入？？？
 
     /**
@@ -175,7 +177,8 @@ class Guess extends Tool {
     */
 
     val count = sc.accumulator(0)
-    saveToRedis(userItemTupleString, count)
+//    saveToRedis(userItemTupleString, count)
+    saveMapToRedis(replaceItemIndex, count)
     Message.addMessage(s"insert into redis :  ${count.value}")
     model
   }
@@ -269,6 +272,18 @@ class Guess extends Tool {
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date = new Date
     sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
+  }
+
+  def saveMapToRedis(rdd: RDD[(String, Map[String, String])], accumulator: Accumulator[Int]): Unit = {
+    val alsPrefix = ConfigurationBL.get("als.key.prefix")
+    rdd.foreachPartition(partition => {
+      val jedis = RedisClient.pool.getResource
+      partition.foreach(s => {
+        jedis.hmset(alsPrefix + s._1, s._2)
+        accumulator += 1
+      })
+      jedis.close()
+    })
   }
 
 

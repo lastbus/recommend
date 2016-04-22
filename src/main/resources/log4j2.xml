@@ -4,28 +4,22 @@
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%d{yyyy/MM/dd HH:mm:ss.SSS} %-5level %logger{36}: %msg%n" />
         </Console>
-        <!--<File name="hello" fileName="log/log" append="true">-->
-            <!--<PatternLayout pattern="%d{yyyy/MM/dd HH:mm:ss.SSS} %-5level %class{36} %L %M - %msg%xEx%n"/>-->
-        <!--</File>-->
-        <!--<RollingFile name="RollingFile" fileName="logs/log"-->
-                     <!--filePattern="logs/%d{yyyyMMdd-HHmm}-%i.log.gz">-->
-            <!--<PatternLayout>-->
-                <!--<Pattern>%d{yyyy-MM-dd HH:mm:ss} %5p [%t] (%F:%L) - %m%n</Pattern>-->
-            <!--</PatternLayout>-->
-            <!--<Policies>-->
-                <!--<TimeBasedTriggeringPolicy modulate="true"/>-->
-            <!--</Policies>-->
-        <!--</RollingFile>-->
+        <RollingFile name="RollingFile" fileName="logs/log"
+                     filePattern="logs/history/%d{yyyyMMdd-HHmm}-%i.log.gz">
+            <PatternLayout>
+                <Pattern>%d{yyyy/MM/dd HH:mm:ss}\t%5p\t%C:%L\t%m%n</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy modulate="true"/>
+            </Policies>
+        </RollingFile>
     </Appenders>
     <Loggers>
-        <Root level="trace">
-            <AppenderRef ref="Console" />
+        <!--<Root level="trace">-->
+            <!--<AppenderRef ref="Console" />-->
+        <!--</Root>-->
+        <Root level="info">
+            <AppenderRef ref="RollingFile" />
         </Root>
-        <!--<Logger name="hello" level="trace" additivity="false">-->
-            <!--<AppenderRef ref="hello" />-->
-        <!--</Logger>-->
-        <!--<Logger name="RollingFile" additivity="false">-->
-            <!--<AppenderRef ref="RollingFile" />-->
-        <!--</Logger>-->
     </Loggers>
 </Configuration>

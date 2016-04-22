@@ -11,10 +11,11 @@ object Test {
 
 
     val jedis = new Jedis("10.201.128.216")
-    val all = jedis.keys("rcmd_guess_*").toArray
-//    jedis.multi()
-//    all.foreach(s =>jedis.del(s.toString))
+    val all = jedis.keys("rcmd_gwyl_*").toArray
     println(all.length)
+//    jedis.multi()
+    all.foreach(s =>jedis.del(s.toString))
+
 
 //    val request = "http://10.201.128.216:8080/recommend/view?gId=188691"
 //    val url = new URL(request)
