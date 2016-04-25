@@ -11,7 +11,6 @@ import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
-import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{Accumulator, SparkConf}
@@ -22,8 +21,6 @@ import org.apache.spark.{Accumulator, SparkConf}
  * Created by MK33 on 2016/3/21.
  */
 class HotSaleGoods extends Tool {
-
-  private val logger = LogManager.getLogger(this.getClass)
 
   override def run(args: Array[String]): Unit = {
     Message.addMessage("\n品类热销商品：\n")

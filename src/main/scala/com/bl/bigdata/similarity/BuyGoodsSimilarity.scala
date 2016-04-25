@@ -5,7 +5,6 @@ import java.util.Date
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{Accumulator, SparkConf}
@@ -17,8 +16,6 @@ import org.apache.spark.{Accumulator, SparkConf}
   * Created by MK33 on 2016/3/16.
   */
 class BuyGoodsSimilarity extends Tool{
-
-  private val logger = LogManager.getLogger(this.getClass.getName)
 
   override def run(args: Array[String]): Unit = {
     logger.info("starting to calculator buy goods similarity.")

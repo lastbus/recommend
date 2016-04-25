@@ -5,7 +5,6 @@ import java.util.Date
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.logging.log4j.LogManager
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.hive.HiveContext
 import redis.clients.jedis.Jedis
@@ -21,10 +20,9 @@ import redis.clients.jedis.Jedis
   * Created by MK33 on 2016/3/18.
   */
 class BuyActivityStatistic extends Tool {
-  private val logger = LogManager.getLogger(this.getClass.getName)
 
   override def run(args: Array[String]): Unit = {
-    Message.addMessage("上午 下午 晚上 购买类目:\n")
+    Message.addMessage("\t上午 下午 晚上 购买类目:\n")
 
     val outputPath = ConfigurationBL.get("recmd.output")
     val local = outputPath.contains("local")
@@ -86,9 +84,9 @@ class BuyActivityStatistic extends Tool {
       jedis.set("rcmd_topcategory_afternoon", noon)
       jedis.set("rcmd_topcategory_evening", evening)
       jedis.close()
-      Message.addMessage(s"\t上午:$morning\n")
-      Message.addMessage(s"\t中午:$noon\n")
-      Message.addMessage(s"\t晚上:$evening\n")
+      Message.addMessage(s"\t上午:\n\t\t$morning\n")
+      Message.addMessage(s"\t中午:\n\t\t$noon\n")
+      Message.addMessage(s"\t晚上:\n\t\t$evening\n")
     }
 
     if (local) {

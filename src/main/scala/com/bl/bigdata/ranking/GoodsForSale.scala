@@ -15,8 +15,6 @@ import org.apache.spark.{Accumulator, SparkConf}
   */
 class GoodsForSale extends Tool {
 
-  private val logger = LogManager.getLogger(this.getClass.getName)
-
   override def run(args: Array[String]): Unit = {
     Message.addMessage("\ngoods for sale:\n")
     logger.info("execute goods for sale.")

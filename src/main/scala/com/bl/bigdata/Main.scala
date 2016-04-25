@@ -12,15 +12,9 @@ object Main {
 
   def main(args: Array[String]) {
     ConfigurationBL.init()
-    val main = new Main with Timer
-    main.run(args)
+    val toolManager = new ToolManager with Timer
+    toolManager.run(args)
   }
 
 }
 
-class Main extends Tool {
-  override def run(args: Array[String]): Unit = {
-    val toolManager = new ToolManager(args)
-    toolManager.start
-  }
-}
