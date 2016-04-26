@@ -5,9 +5,9 @@ import java.util.Date
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
+import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * 计算用户浏览的某类商品之间的相似度
@@ -28,14 +28,8 @@ class BrowserGoodsSimilarity extends Tool {
   override def run(args: Array[String]): Unit = {
     Message.addMessage("看了又看:\n")
     val output = ConfigurationBL.get("recmd.output")
-    val local = output.contains("local")
     val redis = output.contains("redis")
 
-    val sparkConf = new SparkConf().setAppName("看了又看")
-    if (local) sparkConf.setMaster("local[*]")
-    if (redis)
-      for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
-        sparkConf.set(k, v)
     val sc = SparkFactory.getSparkContext
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
@@ -82,8 +76,6 @@ class BrowserGoodsSimilarity extends Tool {
       Message.addMessage(s"\t\trcmd_view_*: $accumulator\n")
       Message.addMessage(s"\t\t插入redis rcmd_view_*: $accumulator2\n")
     }
-    if (local) good1Good2Similarity take 50 foreach println
-
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {

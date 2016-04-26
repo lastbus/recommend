@@ -4,10 +4,9 @@ import java.util
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.logging.log4j.LogManager
+import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * 计算商品的属性，保存成redis中hash值。
@@ -19,15 +18,7 @@ class GoodsForSale extends Tool {
     Message.addMessage("\ngoods for sale:\n")
     logger.info("execute goods for sale.")
     val outputPath = ConfigurationBL.get("recmd.output")
-    val redis = outputPath.contains("redis")
-
-    val sparkConf = new SparkConf()
-      .setAppName(ConfigurationBL.get("goods.for.sale.app.name", this.getClass.getName))
-    if (redis) {
-      for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
-        sparkConf.set(k, v)
-    }
-    val sc = SparkFactory.getSparkContext
+    val sc = SparkFactory.getSparkContext("goods.for.sale")
     val hiveContext = new HiveContext(sc)
     toRedis1(hiveContext)
     toRedis2(hiveContext)

@@ -5,7 +5,7 @@ import com.bl.bigdata.product.GoodsNewArrival
 import com.bl.bigdata.ranking.{GoodsForSale, HotSaleGoods}
 import com.bl.bigdata.similarity.{BuyGoodsSimilarity, SeeBuyGoodsSimilarity, BrowserGoodsSimilarity}
 import com.bl.bigdata.tfidf.GoodsSimilarityInCate
-import com.bl.bigdata.useranalyze.{UserCookie, BrowserNotBuy, BuyActivityStatistic, CategorySimilarity}
+import com.bl.bigdata.useranalyze._
 
 import scala.collection.mutable.ListBuffer
 
@@ -34,6 +34,7 @@ class ToolManager extends Tool {
       list += new UserCookie with ToolRunner // 将用户 ID 和 cookieID 导入到 redis
       list += new GoodsNewArrival with ToolRunner // 新上线商品
       list += new GoodsSimilarityInCate with ToolRunner // 同一类别商品的相似度
+//      list += new UserGoodsWeight with ToolRunner //
     } else {
       val map: Map[String, Tool] = Map("BrowserGoodsSimilarity".toLowerCase -> new BrowserGoodsSimilarity with ToolRunner,
         "SeeBuyGoodsSimilarity".toLowerCase -> new SeeBuyGoodsSimilarity with ToolRunner,
@@ -45,6 +46,7 @@ class ToolManager extends Tool {
         "GoodsForSale".toLowerCase -> new GoodsForSale with ToolRunner,
         "GoodsSimilarityInCate".toLowerCase -> new GoodsSimilarityInCate with ToolRunner,
         "UserCookie".toLowerCase -> new UserCookie with ToolRunner,
+        "UserGoodsWeight".toLowerCase -> new UserGoodsWeight with ToolRunner,
         "GoodsNewArrival".toLowerCase -> new GoodsNewArrival with ToolRunner)
       for (arg <- args; key = arg.toLowerCase if map.contains(key)) list += map(key)
     }

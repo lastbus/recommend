@@ -11,9 +11,9 @@ import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
+import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf}
 
 /**
  * 销量排行：
@@ -27,18 +27,10 @@ class HotSaleGoods extends Tool {
     val output = ConfigurationBL.get("recmd.output")
     val hbase = output.contains("hbase")
     val redis = output.contains("redis")
-    val local = output.contains("local")
 
     val deadTimeOne = HotSaleGoods.getDateBeforeNow(30)
     val deadTimeOneIndex = 2
-    val sparkConf = new SparkConf().setAppName("品类热销商品")
-    if (local) sparkConf.setMaster("local[*]")
-
-    if (redis)
-      for ((key, value) <- ConfigurationBL.getAll.filter(_._1.startsWith("redis.")))
-        sparkConf.set(key, value)
-    val sc = SparkFactory.getSparkContext
-
+    val sc = SparkFactory.getSparkContext("品类热销商品")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 

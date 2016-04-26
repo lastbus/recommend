@@ -5,9 +5,9 @@ import java.util.Date
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
+import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * 计算用户购买的物品种类相似度
@@ -26,16 +26,8 @@ class CategorySimilarity extends Tool {
     Message.addMessage("品类买了还买:\n")
     val outPath = ConfigurationBL.get("recmd.output")
     val redis = outPath.contains("redis")
-    val local = outPath.contains("local")
 
-    val sparkConf = new SparkConf().setAppName("品类买了还买")
-    // 如果在本地测试，将 master 设置为 local 模式
-    if (local) sparkConf.setMaster("local[*]")
-    if (redis) {
-      for ((key, value) <- ConfigurationBL.getAll if key.startsWith("redis."))
-        sparkConf.set(key, value)
-    }
-    val sc = SparkFactory.getSparkContext
+    val sc = SparkFactory.getSparkContext("品类买了还买")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
@@ -100,12 +92,6 @@ class CategorySimilarity extends Tool {
       logger.info("finished to output to redis.")
       Message.message.append(s"\trcmd_bab_category_*: $accumulator\n")
       Message.message.append(s"\t插入redis rcmd_bab_category_*: $accumulator2\n")
-    }
-    if (local) {
-      logger.info("begin to output result to local redis.")
-      //TODO 导入本地 redis
-      result.take(50).foreach(println)
-      logger.info("finished to output result to local redis.")
     }
   }
 

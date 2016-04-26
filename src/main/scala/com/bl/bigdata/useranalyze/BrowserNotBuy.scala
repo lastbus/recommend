@@ -5,9 +5,9 @@ import java.util.Date
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
+import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * Created by MK33 on 2016/3/24.
@@ -18,16 +18,9 @@ class BrowserNotBuy extends Tool {
     Message.addMessage("\n最近两个月浏览未购买商品 按时间排序:\n")
 
     val output = ConfigurationBL.get("recmd.output")
-    val local = output.contains("local")
     val redis = output.contains("redis")
 
-    val sparkConf = new SparkConf().setAppName("最近两个月浏览未购买商品 按时间排序")
-    if (local) sparkConf.setMaster("local")
-    if (redis) {
-      for ((key, value) <- ConfigurationBL.getAll if key.contains("redis."))
-        sparkConf.set(key, value)
-    }
-    val sc = SparkFactory.getSparkContext
+    val sc = SparkFactory.getSparkContext("最近两个月浏览未购买商品 按时间排序")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
@@ -65,7 +58,7 @@ class BrowserNotBuy extends Tool {
       Message.addMessage(s"\trcmd_cookieid_view_*: $accumulator\n")
       Message.addMessage(s"\t插入redis rcmd_cookieid_view_*: $accumulator2\n")
     }
-    if (local) browserNotBuy.take(50).foreach(logger.info(_))
+//    if (local) browserNotBuy.take(50).foreach(logger.info(_))
   }
   /**
     * 将输入的 Array[(category ID, goods ID)] 转换为

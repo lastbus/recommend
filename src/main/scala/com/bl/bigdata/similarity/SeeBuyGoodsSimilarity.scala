@@ -5,9 +5,9 @@ import java.util.Date
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
+import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Accumulator, SparkConf}
 
 /**
   * 计算用户浏览的物品和购买的物品之间的关联度
@@ -20,16 +20,9 @@ class SeeBuyGoodsSimilarity extends Tool {
   override def run(args: Array[String]): Unit = {
     Message.message.append("看了最终买:\n")
     val output = ConfigurationBL.get("recmd.output")
-    val local = output.contains("local")
     val redis = output.contains("redis")
 
-    val sparkConf = new SparkConf().setAppName("看了最终买")
-    if (local) sparkConf.setMaster("local[*]")
-    if (redis)
-      for ((k, v) <- ConfigurationBL.getAll if k.startsWith("redis."))
-        sparkConf.set(k, v)
-
-    val sc = SparkFactory.getSparkContext
+    val sc = SparkFactory.getSparkContext("看了最终买")
 
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
@@ -75,7 +68,6 @@ class SeeBuyGoodsSimilarity extends Tool {
       Message.message.append(s"\t插入redis rcmd_shop_*: $accumulator2\n")
 
     }
-    if (local) browserAndBuy.take(50).foreach(println)
 //      sc.toRedisKV(browserAndBuy)
     browserAndBuy.unpersist()
   }

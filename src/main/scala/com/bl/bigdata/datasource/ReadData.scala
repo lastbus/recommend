@@ -12,7 +12,8 @@ object ReadData {
 
   def readHive(sc: SparkContext, sql: String): RDD[Item] = {
     val hiveContext = new HiveContext(sc)
-    hiveContext.sql(sql).rdd.map(row => Item(row.toSeq.map(_.toString).toArray))
+    hiveContext.sql(sql).rdd.map(row => if (row.anyNull) null else Item(row.toSeq.map(_.toString).toArray))
+      .filter(_ != null)
   }
 
   def readLocal(sc: SparkContext, path: String, delimiter: String = "\t"): RDD[Item] ={

@@ -5,7 +5,6 @@ import java.util.Date
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.spark.SparkConf
 import org.apache.spark.sql.hive.HiveContext
 import redis.clients.jedis.Jedis
 
@@ -22,20 +21,13 @@ import redis.clients.jedis.Jedis
 class BuyActivityStatistic extends Tool {
 
   override def run(args: Array[String]): Unit = {
-    Message.addMessage("\t上午 下午 晚上 购买类目:\n")
+    Message.addMessage("上午 下午 晚上 购买类目:\n")
 
     val outputPath = ConfigurationBL.get("recmd.output")
-    val local = outputPath.contains("local")
     val redis = outputPath.contains("redis")
     val num = ConfigurationBL.get("buy.activity.category.topNum").toInt
 
-    val sparkConf = new SparkConf().setAppName("上午 下午 晚上 购买类目")
-    if (local) sparkConf.setMaster("local[*]")
-    if (redis)
-      for ((key, value) <- ConfigurationBL.getAll if key.startsWith("redis."))
-        sparkConf.set(key, value)
-
-    val sc = SparkFactory.getSparkContext
+    val sc = SparkFactory.getSparkContext("上午 下午 晚上 购买类目")
 
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
@@ -89,9 +81,6 @@ class BuyActivityStatistic extends Tool {
       Message.addMessage(s"\t晚上:\n\t\t$evening\n")
     }
 
-    if (local) {
-      logger.info(s"上午：$morning\n下午：$noon\n晚上：$evening")
-    }
   }
 }
 
