@@ -3,12 +3,11 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, Item2, ReadData}
+import com.bl.bigdata.datasource.{Item, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.hive.HiveContext
 
 /**
   * 计算用户浏览的某类商品之间的相似度
@@ -29,12 +28,12 @@ class BrowserGoodsSimilarity extends Tool {
   override def run(args: Array[String]): Unit = {
     Message.addMessage("看了又看:\n")
     val output = ConfigurationBL.get("recmd.output")
+    val prefix = ConfigurationBL.get("browser.again")
     val redis = output.contains("redis")
-
-    val sc = SparkFactory.getSparkContext
+    val sc = SparkFactory.getSparkContext("看了又看")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
-
+    // 根据最近多少天的浏览记录，默认 90天
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date0 = new Date
@@ -42,18 +41,15 @@ class BrowserGoodsSimilarity extends Tool {
     val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_sid  " +
       "from recommendation.user_behavior_raw_data  where dt >= " + start
 
-    val rawRdd = ReadData.readHive(sc, sql).map{ case Item(cookie, category, date, behaviorId, goodsId) =>
+    val rawRdd = ReadData.readHive(sc, sql).map{ case Item(Array(cookie, category, date, behaviorId, goodsId)) =>
       (cookie, category, date.substring(0, date.indexOf(" ")), behaviorId, goodsId)}
       .filter(_._4 == "1000")
-      .map { case (cookie, category, date, behaviorId, goodsId) =>
-        ((cookie, category, date), goodsId)
-      }.distinct()
+      .map { case (cookie, category, date, behaviorId, goodsId) => ((cookie, category, date), goodsId)}
       .filter(v => {
-        val temp = v._1._2
-        if (temp.trim.length == 0) false
-        else if (temp.equalsIgnoreCase("NULL")) false
-        else true
-      })
+        if (v._1._2.trim.length == 0) false
+        else if (v._1._2.equalsIgnoreCase("NULL")) false
+        else true})
+      .distinct()
     rawRdd.cache()
     // 将用户看过的商品两两结合在一起
     val tuple = rawRdd.join(rawRdd).filter { case (k, (v1, v2)) => v1 != v2 }
@@ -67,14 +63,15 @@ class BrowserGoodsSimilarity extends Tool {
       .map { case (good2, ((good1, freq), good2Freq1)) => (good1, Seq((good2, freq.toDouble / good2Freq1))) }
       .reduceByKey((s1, s2) => s1 ++ s2)
       .mapValues(v => { accumulator += 1; v.sortWith(_._2 > _._2).take(20) })
-      .map { case (goods1, goods2) => ("rcmd_view_" + goods1, goods2.map(_._1).mkString("#")) }
+      .map { case (goods1, goods2) => (prefix + goods1, goods2.map(_._1).mkString("#")) }
     rawRdd.unpersist()
     // 保存到 redis 中
     if (redis) {
       saveToRedis(good1Good2Similarity, accumulator2)
-      Message.addMessage(s"\t\trcmd_view_*: $accumulator\n")
-      Message.addMessage(s"\t\t插入redis rcmd_view_*: $accumulator2\n")
+      Message.addMessage(s"\t\t$prefix*: $accumulator\n")
+      Message.addMessage(s"\t\t插入 redis $prefix*: $accumulator2\n")
     }
+
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
