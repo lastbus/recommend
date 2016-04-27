@@ -3,6 +3,7 @@ package com.bl.bigdata.ranking
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.datasource.{Item, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.hadoop.hbase.HBaseConfiguration
@@ -13,7 +14,6 @@ import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.hive.HiveContext
 
 /**
  * 销量排行：
@@ -38,17 +38,11 @@ class HotSaleGoods extends Tool {
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date = new Date
     val start = sdf.format(new Date(date.getTime - 24000L * 3600 * 60))
-    val sql = s"select goods_sid, goods_name, quanlity, event_date, category_sid from recommendation.user_behavior_raw_data where dt >= $start"
+    val sql = s"select goods_sid, goods_name, quanlity, event_date, category_sid " +
+      s" from recommendation.user_behavior_raw_data where dt >= $start"
 
-    val hiveContext = new HiveContext(sc)
-//    val result = sc.textFile(input).map(line => {
-//      val w = line.split("\t")
-//      (w(3), w(4), w(6).toDouble, w(7), w(9), w(10))
-//    })
-//      .filter(item => HotSaleGoods.filterDate(item, deadTimeTwo))
-    val result = hiveContext.sql(sql).rdd.
-      map(row => if (!row.anyNull) (row.getString(0), row.getString(1), row.getInt(2),
-                                    row.getString(3), row.getString(4)) else null).filter(_ != null)
+    val result = ReadData.readHive(sc, sql).map{ case Item(goodsID, goodsName, sale_num, sale_time, categoryID) =>
+      (goodsID, goodsName, sale_num.toInt, sale_time, categoryID) }
       .map { case (goodsID, goodsName, sale_num, sale_time, categoryID) =>
         (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID))
       }.reduceByKey((s1, s2) => (s1._1, s1._2 + s2._2, s1._3))
@@ -70,15 +64,10 @@ class HotSaleGoods extends Tool {
     if (hbase){
       val conf = HBaseConfiguration.create()
       conf.set(TableOutputFormat.OUTPUT_TABLE, "h1")
-      conf.set("hbase.zookeeper.property.clientPort", "2181")
-      conf.set("hbase.zookeeper.quorum", "10.201.129.81")
-      conf.set("hbase.master", "10.201.129.78:60000")
 
       val columnFamilyBytes = Bytes.toBytes("c1")
       val columnNameBytes = Bytes.toBytes("hot_sale")
-
       val c = sc.hadoopConfiguration
-      c.addResource("hbase-site.xml")
       c.set(TableOutputFormat.OUTPUT_TABLE, "h1")
       val job = Job.getInstance(c)
       job.setOutputFormatClass(classOf[TableOutputFormat[Put]])

@@ -1,6 +1,7 @@
 package com.bl.bigdata.tfidf
 
 import breeze.linalg.{SparseVector => BSV, norm}
+import com.bl.bigdata.datasource.{Item, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.hadoop.hbase.HBaseConfiguration
@@ -11,7 +12,6 @@ import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.mllib.linalg.{SparseVector => SV, _}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{Accumulator, SparkConf}
 
 import scala.collection.mutable
@@ -54,18 +54,9 @@ class GoodsSimilarityInCate extends Tool with Serializable {
 
     val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
       " from recommendation.product_properties_raw_data"
-    val hiveContext = new HiveContext(sc)
-//    val rawRDD = sc.textFile(inputPath)
-//      .map(line => {
-//        // 提取字段：商品 id，商品编号，商品种类，商品品牌，商品价格，商品属性
-//        val attributes = line.split(delimiter)
-//        // 商品 id，商品编号，商品种类，商品品牌，商品属性，商品价格
-//        (attributes(0), attributes(1), attributes(2), attributes(3), attributes(5), attributes(4))
-//      })
-    val rawRDD = hiveContext.sql(sql).rdd
-      .map(row => if (!row.anyNull) (row.getString(0), row.getString(1), row.getLong(2).toString,
-                      row.getString(3), row.getString(5), row.getDouble(4).toString) else null)
-      .filter(_ != null)
+
+    val rawRDD =  ReadData.readHive(sc, sql).map{ case Item(goodsID, itemNo, category, band, price, attribute) =>
+      (goodsID, itemNo, category, band, attribute, price) }
 
     // 计算每个类别的商品价格分布，分为 5 份，假设每个类别的商品价格数大于 5 个。
     val categoryRDD = rawRDD.map { case (goodsID, itemNo, category, band, attribute, price) => (category, price) }

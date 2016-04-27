@@ -3,11 +3,11 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.datasource.{Item, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.hive.HiveContext
 
 /**
   * 计算用户浏览的物品和购买的物品之间的关联度
@@ -21,30 +21,19 @@ class SeeBuyGoodsSimilarity extends Tool {
     Message.message.append("看了最终买:\n")
     val output = ConfigurationBL.get("recmd.output")
     val redis = output.contains("redis")
-
     val sc = SparkFactory.getSparkContext("看了最终买")
-
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date0 = new Date
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
-    val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_sid from recommendation.user_behavior_raw_data  " +
+    val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_sid  " +
+      "from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
-    val hiveContext = new HiveContext(sc)
-    val rawData = hiveContext.sql(sql).rdd.map(row => ((row.getString(0), row.getString(1),
-        {val t = row.getString(2); t.substring(0, t.indexOf(" "))}), row.getString(3), row.getString(4)))
-//    val rawData = HiveDataUtil.readHive(sql, sc)
-//      // 提取需要的字段
-//      .map( line => {
-//      //cookie ID, member id, session id, goods id, goods name, quality,
-//      // event data, behavior code, channel, category sid, dt
-//      val w = line.split("\t")
-//      // cookie,商品类别,日期,用户行为编码,商品id
-//      ((w(0), w(1), w(6).substring(0, w(6).indexOf(" "))), w(7), w(3))
-//    })
+    val rawData = ReadData.readHive(sc, sql).map{ case Item(cookie, category, date, behaviorId, goodsId) =>
+      ((cookie, category, date.substring(0, date.indexOf(" "))), behaviorId, goodsId)}
     // 用户浏览的商品
     val browserRdd = rawData.filter { case ((cookie, category, date), behavior, goodsID) => behavior.equals("1000") }
   .map { case ((cookie, category, date), behavior, goodsID) => ((cookie, category, date), goodsID) }.distinct()

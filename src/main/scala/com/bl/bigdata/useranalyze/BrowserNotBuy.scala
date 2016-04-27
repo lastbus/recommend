@@ -3,11 +3,11 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.datasource.{Item, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.hive.HiveContext
 
 /**
   * Created by MK33 on 2016/3/24.
@@ -31,18 +31,8 @@ class BrowserNotBuy extends Tool {
     val sql = "select cookie_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
 
-    val hive = new HiveContext(sc)
-    val a = hive.sql(sql).rdd.map(row => ((row.getString(0), {val d = row.getString(1); d.substring(0, d.indexOf(" "))}),
-      row.getString(2), (row.getString(3), row.getString(4))))
-//    val a = HiveDataUtil.readHive(sql, sc)
-//      // 提取的字段: 商品类别,cookie,日期,用户行为编码,商品id
-//      .map( line => {
-//      //cookie ID, member id, session id, goods id, goods name, quality,
-//      // event data, behavior code, channel, category sid, dt
-//      val w = line.split("\t")
-//      // cookie,日期,用户行为编码,商品id
-//      ((w(0), w(6).substring(0, w(6).indexOf(" "))), w(7), (w(9), w(3)))
-//    })
+    val a = ReadData.readHive(sc, sql).map{ case Item(cookie, date, behavior, category, goods) =>
+        ((cookie, date.substring(0, date.indexOf(" "))), behavior, (category, goods)) }
 
     val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000")}
     val buyRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("4000")}
@@ -58,7 +48,6 @@ class BrowserNotBuy extends Tool {
       Message.addMessage(s"\trcmd_cookieid_view_*: $accumulator\n")
       Message.addMessage(s"\t插入redis rcmd_cookieid_view_*: $accumulator2\n")
     }
-//    if (local) browserNotBuy.take(50).foreach(logger.info(_))
   }
   /**
     * 将输入的 Array[(category ID, goods ID)] 转换为

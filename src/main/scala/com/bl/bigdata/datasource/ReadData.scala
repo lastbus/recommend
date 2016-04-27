@@ -1,8 +1,8 @@
 package com.bl.bigdata.datasource
 
-import org.apache.spark.{SparkConf, SparkContext}
+import com.bl.bigdata.util.SparkFactory
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.{SparkConf, SparkContext}
 
 /**
   * Created by MK33 on 2016/4/8.
@@ -11,12 +11,12 @@ object ReadData {
 
 
   def readHive(sc: SparkContext, sql: String): RDD[Item] = {
-    val hiveContext = new HiveContext(sc)
+    val hiveContext = SparkFactory.getHiveContext
     hiveContext.sql(sql).rdd.map(row => if (row.anyNull) null else Item(row.toSeq.map(_.toString).toArray))
       .filter(_ != null)
   }
 
-  def readLocal(sc: SparkContext, path: String, delimiter: String = "\t"): RDD[Item] ={
+  def readLocal(sc: SparkContext, path: String, delimiter: String = "\t"): RDD[Item] = {
     sc.textFile(path).map(line => Item(line.split(delimiter)))
   }
 

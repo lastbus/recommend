@@ -3,6 +3,7 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.datasource.{Item, Item2, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
@@ -41,13 +42,11 @@ class BrowserGoodsSimilarity extends Tool {
     val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_sid  " +
       "from recommendation.user_behavior_raw_data  where dt >= " + start
 
-    val hiveContext = new HiveContext(sc)
-    val rawRdd = hiveContext.sql(sql).rdd
-      .map(row => (row.getString(0), row.getString(1), row.getString(2), row.getString(3), row.getString(4)))
-      // 提取 user 浏览商品的行为
-      .filter{ case (cookie, category, date, behaviorId, goodsId) => behaviorId == "1000"}
+    val rawRdd = ReadData.readHive(sc, sql).map{ case Item(cookie, category, date, behaviorId, goodsId) =>
+      (cookie, category, date.substring(0, date.indexOf(" ")), behaviorId, goodsId)}
+      .filter(_._4 == "1000")
       .map { case (cookie, category, date, behaviorId, goodsId) =>
-        ((cookie, category, date.substring(0, date.indexOf(" "))), goodsId)
+        ((cookie, category, date), goodsId)
       }.distinct()
       .filter(v => {
         val temp = v._1._2

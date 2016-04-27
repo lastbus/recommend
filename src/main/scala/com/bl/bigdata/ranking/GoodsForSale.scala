@@ -17,7 +17,6 @@ class GoodsForSale extends Tool {
   override def run(args: Array[String]): Unit = {
     Message.addMessage("\ngoods for sale:\n")
     logger.info("execute goods for sale.")
-    val outputPath = ConfigurationBL.get("recmd.output")
     val sc = SparkFactory.getSparkContext("goods.for.sale")
     val hiveContext = new HiveContext(sc)
     toRedis1(hiveContext)
@@ -29,7 +28,6 @@ class GoodsForSale extends Tool {
   def toRedis1(hiveContext: HiveContext) = {
 
     val sql = "select sid, category_id from recommendation.goods_avaialbe_for_sale_channel where channel_sid = '3'"
-
     val readRDD = hiveContext.sql(sql).rdd.map(row => (row.getString(0), row.getLong(1).toString)).distinct()
     val sc = hiveContext.sparkContext
     val count1Accumulator = sc.accumulator(0)

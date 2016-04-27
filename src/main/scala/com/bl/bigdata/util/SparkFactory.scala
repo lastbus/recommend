@@ -1,5 +1,6 @@
 package com.bl.bigdata.util
 
+import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkContext, SparkConf}
 
 import scala.xml.XML
@@ -9,6 +10,7 @@ import scala.xml.XML
   */
 object SparkFactory {
   private[this] var sc: SparkContext = _
+  private[this] var hiveContext: HiveContext = _
 
   /** */
   def getSparkContext(appName: String): SparkContext = {
@@ -24,9 +26,6 @@ object SparkFactory {
             sparkConf.set((property \ "name").text, (property \ "value").text)
         }
       sc = new SparkContext(sparkConf)
-//      sys.addShutdownHook(new Thread {
-//        override def run() = destroyResource()
-//      })
       sc
     } else {
       // 如果sc已经初始化了，那么传递给spark集群的参数则对集群没有影响了
@@ -42,6 +41,17 @@ object SparkFactory {
 
   def destroyResource(): Unit ={
     if (sc != null) sc.stop()
+  }
+
+
+  def getHiveContext : HiveContext = {
+    if (hiveContext != null) hiveContext
+    else if (hiveContext == null && sc != null) {hiveContext = new HiveContext(sc); hiveContext}
+    else {
+      sc = getSparkContext
+      hiveContext = new HiveContext(sc)
+      hiveContext
+    }
   }
 
 

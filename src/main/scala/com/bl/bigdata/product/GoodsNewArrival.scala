@@ -37,13 +37,12 @@ class GoodsNewArrival extends Tool {
     val nowMills = new Date().getTime
     val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
     val rawData = ReadData.readHive(sc, sql)
-      .map { case Item(Array(sid, productID, bandID, categoryID, channelID, onlineTime)) =>
+      .map { case Item(sid, productID, bandID, categoryID, channelID, onlineTime) =>
         (bandID, sid, productID, categoryID, channelID, (nowMills - sdf.parse(onlineTime).getTime) / 1000)
       }.cache()
     val pcRDD = rawData.filter(_._5 == "3").map(s => (s._1, s._2,s._3,s._4,s._6))
     val appRDD = rawData.filter(_._5 == "1").map(s => (s._1, s._2,s._3,s._4,s._6))
 
-    pcRDD.map(s => (s._1, s._3, s._4)).distinct()
     val pcResult = calculate(pcRDD).map(s => (prefixPC + s._1, s._2))
     val pcAccumulator = sc.accumulator(0)
     saveToRedis(pcResult, pcAccumulator)

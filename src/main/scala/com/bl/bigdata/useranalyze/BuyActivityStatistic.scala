@@ -3,9 +3,9 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.datasource.{Item, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.spark.sql.hive.HiveContext
 import redis.clients.jedis.Jedis
 
 /**
@@ -26,25 +26,15 @@ class BuyActivityStatistic extends Tool {
     val outputPath = ConfigurationBL.get("recmd.output")
     val redis = outputPath.contains("redis")
     val num = ConfigurationBL.get("buy.activity.category.topNum").toInt
-
     val sc = SparkFactory.getSparkContext("上午 下午 晚上 购买类目")
-
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date = new Date
     val start = sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
     val sql = "select category_sid, event_date, behavior_type from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
-
-    //    val rawRDD = HiveDataUtil.readHive(sql, sc).map(line => {
-    //      val attr = line.split("\t")
-    //      // 类目  时间  行为编码
-    //      (attr(9),attr(6).substring(attr(6).indexOf(" ") + 1), attr(7))
-    //    })
-    // 购买记录
-    val hive = new HiveContext(sc)
-    val rawRDD = hive.sql(sql).rdd
-      .map(row => (row.getString(0), {val t = row.getString(1); t.substring(t.indexOf(" ") + 1)}, row.getString(2)))
+    val rawRDD = ReadData.readHive(sc, sql).map{ case Item(category, date1, behavior) =>
+      (category, date1.substring(date1.indexOf(" ") + 1), behavior)}
       .filter{ case (category, time, behavior) => behavior.equals("4000") && !category.equalsIgnoreCase("NULL")}
       .map{ case (category, time, behavior) => (category, time)}
 

@@ -3,11 +3,11 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.datasource.{Item, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.hive.HiveContext
 
 /**
   * 计算用户购买的物品种类相似度
@@ -38,35 +38,14 @@ class CategorySimilarity extends Tool {
     val sql = "select category_sid, cookie_id, event_date, behavior_type, goods_sid from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
 
-//    val buyGoodsRDD = HiveDataUtil.readHive(sql, sc)
-//      // 提取的字段: 商品类别,cookie,日期,用户行为编码,商品id
-//      .map( line => {
-//      val w = line.split("\t")
-//      // 商品类别,cookie,日期,用户行为编码,商品id
-//      (w(9), (w(0), w(6).substring(0, w(6).indexOf(" ")), w(7), w(3)))
-//    })
-//      // 提取购买的物品
-    val hiveContext = new HiveContext(sc)
-    val buyGoodsRDD = hiveContext.sql(sql).rdd
-      .map(row => (row.getString(0), (row.getString(1), {
-        val t = row.getString(2); t.substring(0, t.indexOf(" "))
-      },
-        row.getString(3), row.getString(4))))
-      .filter { case (category, (cookie, date, behaviorID, goodsID)) => behaviorID.equals("4000") }
+    val buyGoodsRDD = ReadData.readHive(sc, sql).map{ case Item(category, cookie, date, behaviorId, goodsId) =>
+      (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}
+      .filter(_._2._3 == "4000")
       .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }.distinct()
 
     val sql2 = "select category_id, level2_id from recommendation.dim_category"
-    val categoriesRDD = hiveContext.sql(sql2).map(row => (row.getLong(0), row.getLong(1))).
-      distinct().
-      map(s => (s._1.toString, s._2.toString))
-
-//    val categoriesRDD = sc.textFile(inputPath2)
-//      // 提取字段
-//      .map( line => {
-//      val w = line.split("\t")
-//      // 商品的末级目录，
-//      (w(0), w(w.length - 4))
-//    }).distinct
+    val categoriesRDD = ReadData.readHive(sc, sql2).map{ case Item(category, level) => (category, level)}.
+      distinct()
 
     val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)
       // 将商品的末级类别用一级类别替换
