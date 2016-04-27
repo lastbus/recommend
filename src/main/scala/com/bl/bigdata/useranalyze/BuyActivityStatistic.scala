@@ -33,7 +33,7 @@ class BuyActivityStatistic extends Tool {
     val start = sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
     val sql = "select category_sid, event_date, behavior_type from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
-    val rawRDD = ReadData.readHive(sc, sql).map{ case Item(category, date1, behavior) =>
+    val rawRDD = ReadData.readHive(sc, sql).map{ case Item(Array(category, date1, behavior)) =>
       (category, date1.substring(date1.indexOf(" ") + 1), behavior)}
       .filter{ case (category, time, behavior) => behavior.equals("4000") && !category.equalsIgnoreCase("NULL")}
       .map{ case (category, time, behavior) => (category, time)}

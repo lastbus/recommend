@@ -4,7 +4,7 @@ package com.bl.bigdata.util
 /**
   * Created by MK33 on 2016/3/10.
   */
-abstract class ConfigurableBL {
+abstract class ConfigurableBL extends Serializable {
 
   def addResource(path: String)
   def getOption(key: String): Option[String]

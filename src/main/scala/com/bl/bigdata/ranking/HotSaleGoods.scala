@@ -6,12 +6,6 @@ import java.util.Date
 import com.bl.bigdata.datasource.{Item, ReadData}
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.hadoop.hbase.HBaseConfiguration
-import org.apache.hadoop.hbase.client._
-import org.apache.hadoop.hbase.io.ImmutableBytesWritable
-import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
-import org.apache.hadoop.hbase.util.Bytes
-import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 
@@ -25,6 +19,7 @@ class HotSaleGoods extends Tool {
   override def run(args: Array[String]): Unit = {
     Message.addMessage("\n品类热销商品：\n")
     val output = ConfigurationBL.get("recmd.output")
+    val prefix = ConfigurationBL.get("hot.sale")
     val hbase = output.contains("hbase")
     val redis = output.contains("redis")
 
@@ -34,14 +29,13 @@ class HotSaleGoods extends Tool {
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
-
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date = new Date
     val start = sdf.format(new Date(date.getTime - 24000L * 3600 * 60))
     val sql = s"select goods_sid, goods_name, quanlity, event_date, category_sid " +
       s" from recommendation.user_behavior_raw_data where dt >= $start"
 
-    val result = ReadData.readHive(sc, sql).map{ case Item(goodsID, goodsName, sale_num, sale_time, categoryID) =>
+    val result = ReadData.readHive(sc, sql).map{ case Item(Array(goodsID, goodsName, sale_num, sale_time, categoryID)) =>
       (goodsID, goodsName, sale_num.toInt, sale_time, categoryID) }
       .map { case (goodsID, goodsName, sale_num, sale_time, categoryID) =>
         (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID))
@@ -50,33 +44,32 @@ class HotSaleGoods extends Tool {
         (categoryID, Seq((goodsID, sale_num)))
       }
       .reduceByKey((s1, s2) =>s1 ++ s2)
-      .map { case (category, seq) => {accumulator += 1; ("rcmd_cate_hotsale_" + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#"))} }
+      .map { case (category, seq) => {accumulator += 1; (prefix + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#"))} }
     result.cache()
     if(redis) {
       logger.info("start to write 热销 to redis.")
 //      sc.toRedisKV(result)
       saveToRedis(result, accumulator2)
       logger.info("write finished.")
-      Message.addMessage(s"\t品类热销商品: $accumulator\n")
-      Message.addMessage(s"\t插入redis 品类热销商品: $accumulator2\n")
+      Message.addMessage(s"\t$prefix*: $accumulator\n")
+      Message.addMessage(s"\t插入 redis $prefix*: $accumulator2\n")
     }
 
     if (hbase){
-      val conf = HBaseConfiguration.create()
-      conf.set(TableOutputFormat.OUTPUT_TABLE, "h1")
-
-      val columnFamilyBytes = Bytes.toBytes("c1")
-      val columnNameBytes = Bytes.toBytes("hot_sale")
-      val c = sc.hadoopConfiguration
-      c.set(TableOutputFormat.OUTPUT_TABLE, "h1")
-      val job = Job.getInstance(c)
-      job.setOutputFormatClass(classOf[TableOutputFormat[Put]])
-      job.setOutputKeyClass(classOf[ImmutableBytesWritable])
-      job.setOutputValueClass(classOf[Result])
-      result.map{ case (k, v) => {
-        val put = new Put(Bytes.toBytes(k))
-        (new ImmutableBytesWritable(k.getBytes()), put.addColumn(columnFamilyBytes, columnNameBytes, Bytes.toBytes(v)))
-      }}.saveAsNewAPIHadoopDataset(job.getConfiguration)
+//      val conf = HBaseConfiguration.create()
+//      conf.set(TableOutputFormat.OUTPUT_TABLE, "h1")
+//      val columnFamilyBytes = Bytes.toBytes("c1")
+//      val columnNameBytes = Bytes.toBytes("hot_sale")
+//      val c = sc.hadoopConfiguration
+//      c.set(TableOutputFormat.OUTPUT_TABLE, "h1")
+//      val job = Job.getInstance(c)
+//      job.setOutputFormatClass(classOf[TableOutputFormat[Put]])
+//      job.setOutputKeyClass(classOf[ImmutableBytesWritable])
+//      job.setOutputValueClass(classOf[Result])
+//      result.map{ case (k, v) => {
+//        val put = new Put(Bytes.toBytes(k))
+//        (new ImmutableBytesWritable(k.getBytes()), put.addColumn(columnFamilyBytes, columnNameBytes, Bytes.toBytes(v)))
+//      }}.saveAsNewAPIHadoopDataset(job.getConfiguration)
 
     }
     result.unpersist()

@@ -22,6 +22,7 @@ class BuyGoodsSimilarity extends Tool{
     Message.addMessage("\n买了还买:\n")
 
     val outPath = ConfigurationBL.get("recmd.output")
+    val prefix = ConfigurationBL.get("buy.buy")
     val redis = outPath.contains("redis")
     val sc = SparkFactory.getSparkContext("买了还买")
     val accumulator = sc.accumulator(0)
@@ -35,14 +36,13 @@ class BuyGoodsSimilarity extends Tool{
       " from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
 
-    val buyGoodsRDD = ReadData.readHive(sc, sql).map{ case Item(cookie, category, date, behaviorId, goodsId) =>
+    val buyGoodsRDD = ReadData.readHive(sc, sql).map{ case Item(Array(category, cookie, date, behaviorId, goodsId)) =>
       (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}
       .filter(_._2._3 == "4000")
       .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }.distinct()
 
     val sql2 = "select category_id, level2_id from recommendation.dim_category"
-    ReadData.readHive(sc, sql2).map{ case Item(category, level) => (category, level)}
-    val categoriesRDD = ReadData.readHive(sc, sql2).map{ case Item(category, level) => (category, level)}
+    val categoriesRDD = ReadData.readHive(sc, sql2).map{ case Item(Array(category, level)) => (category, level)}
       .distinct().map(s => (s._1.toString, s._2.toString))
 
     val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)
@@ -62,10 +62,10 @@ class BuyGoodsSimilarity extends Tool{
 
     if (redis) {
       logger.info(s"output result to redis, host: ${ConfigurationBL.get("redis.host")}.")
-      saveToRedis(sorting.map(s => ("rcmd_bab_goods_" + s._1, s._2)), accumulator2)
+      saveToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2)
       logger.info("finished to output to redis.")
-      Message.addMessage(s"\trcmd_bab_goods_*: $accumulator.\n")
-      Message.addMessage(s"\t插入 redis rcmd_bab_goods_*: $accumulator2.\n")
+      Message.addMessage(s"\tr$prefix*: $accumulator.\n")
+      Message.addMessage(s"\t插入 redis $prefix*: $accumulator2.\n")
     }
   }
 

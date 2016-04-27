@@ -24,7 +24,7 @@ import scala.collection.mutable._
 class GoodsNewArrival extends Tool {
 
   override def run(args: Array[String]): Unit = {
-    Message.addMessage("\nbegin execute calculator goods_new_arrival:\n")
+    Message.addMessage("\n新商品上市：\n")
     val prefixPC = ConfigurationBL.get("goods.new.arrival.prefix.pc")
     val prefixAPP = ConfigurationBL.get("goods.new.arrival.prefix.app")
 
@@ -32,12 +32,11 @@ class GoodsNewArrival extends Tool {
 
     val sql = "select sid, pro_sid, brand_sid, category_id, channel_sid, sell_start_date " +
       "from recommendation.goods_new_arrival"
-    Message.addMessage(s"\thive sql:\n \t\t$sql\n")
 
     val nowMills = new Date().getTime
     val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
     val rawData = ReadData.readHive(sc, sql)
-      .map { case Item(sid, productID, bandID, categoryID, channelID, onlineTime) =>
+      .map { case Item(Array(sid, productID, bandID, categoryID, channelID, onlineTime)) =>
         (bandID, sid, productID, categoryID, channelID, (nowMills - sdf.parse(onlineTime).getTime) / 1000)
       }.cache()
     val pcRDD = rawData.filter(_._5 == "3").map(s => (s._1, s._2,s._3,s._4,s._6))
@@ -46,12 +45,12 @@ class GoodsNewArrival extends Tool {
     val pcResult = calculate(pcRDD).map(s => (prefixPC + s._1, s._2))
     val pcAccumulator = sc.accumulator(0)
     saveToRedis(pcResult, pcAccumulator)
-    Message.addMessage(s"\tpc: insert into redis $prefixPC* :\t $pcAccumulator")
+    Message.addMessage(s"\tpc: 插入 redis $prefixPC* :\t $pcAccumulator")
 
     val appResult = calculate(appRDD).map(s => (prefixAPP + s._1, s._2))
     val appAccumulator = sc.accumulator(0)
     saveToRedis(appResult, appAccumulator)
-    Message.addMessage(s"\tpc: insert into redis $prefixAPP* :\t $appAccumulator")
+    Message.addMessage(s"\tpc: 插入 redis $prefixAPP* :\t $appAccumulator")
 
   }
 

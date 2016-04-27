@@ -55,7 +55,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
       " from recommendation.product_properties_raw_data"
 
-    val rawRDD =  ReadData.readHive(sc, sql).map{ case Item(goodsID, itemNo, category, band, price, attribute) =>
+    val rawRDD =  ReadData.readHive(sc, sql).map{ case Item(Array(goodsID, itemNo, category, band, price, attribute)) =>
       (goodsID, itemNo, category, band, attribute, price) }
 
     // 计算每个类别的商品价格分布，分为 5 份，假设每个类别的商品价格数大于 5 个。

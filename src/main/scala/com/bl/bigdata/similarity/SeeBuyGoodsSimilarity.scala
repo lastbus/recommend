@@ -20,6 +20,7 @@ class SeeBuyGoodsSimilarity extends Tool {
   override def run(args: Array[String]): Unit = {
     Message.message.append("看了最终买:\n")
     val output = ConfigurationBL.get("recmd.output")
+    val prefix = ConfigurationBL.get("see.buy")
     val redis = output.contains("redis")
     val sc = SparkFactory.getSparkContext("看了最终买")
     val limit = ConfigurationBL.get("day.before.today", "90").toInt
@@ -32,7 +33,7 @@ class SeeBuyGoodsSimilarity extends Tool {
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
-    val rawData = ReadData.readHive(sc, sql).map{ case Item(cookie, category, date, behaviorId, goodsId) =>
+    val rawData = ReadData.readHive(sc, sql).map{ case Item(Array(cookie, category, date, behaviorId, goodsId)) =>
       ((cookie, category, date.substring(0, date.indexOf(" "))), behaviorId, goodsId)}
     // 用户浏览的商品
     val browserRdd = rawData.filter { case ((cookie, category, date), behavior, goodsID) => behavior.equals("1000") }
@@ -47,14 +48,14 @@ class SeeBuyGoodsSimilarity extends Tool {
       .reduceByKey(_ + _)
       .map{ case ((goodsBrowser, goodsBuy), relation) => (goodsBrowser, Seq((goodsBuy, relation)))}
       .reduceByKey((s1, s2) =>  s1 ++ s2)
-      .map(s => { accumulator += 1;("rcmd_shop_" + s._1, s._2.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) })
+      .map(s => { accumulator += 1;(prefix + s._1, s._2.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) })
     browserAndBuy.cache()
 
     // 如果是本地运行，则直接输出，否则保存在 hadoop 中。
     if (redis) {
       saveToRedis2(browserAndBuy, accumulator2)
-      Message.message.append(s"\trcmd_shop_*: $accumulator\n")
-      Message.message.append(s"\t插入redis rcmd_shop_*: $accumulator2\n")
+      Message.message.append(s"\t$prefix*: $accumulator\n")
+      Message.message.append(s"\t插入 redis $prefix*: $accumulator2\n")
 
     }
 //      sc.toRedisKV(browserAndBuy)
