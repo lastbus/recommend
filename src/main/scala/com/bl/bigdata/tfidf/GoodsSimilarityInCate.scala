@@ -10,9 +10,9 @@ import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
+import org.apache.spark.Accumulator
 import org.apache.spark.mllib.linalg.{SparseVector => SV, _}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{Accumulator, SparkConf}
 
 import scala.collection.mutable
 
@@ -45,46 +45,38 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     val columnFamily = ""
     val columnName = ""
 
-    val sparkConf = new SparkConf().setAppName(this.getClass.getName)
-    if (local) sparkConf.setMaster("local[*]")
-    if (redis)
-      for ((k, v) <- ConfigurationBL.getAll)
-        sparkConf.set(k, v)
-    val sc = SparkFactory.getSparkContext
-
+    val sc = SparkFactory.getSparkContext("同类商品属性相似度")
     val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
       " from recommendation.product_properties_raw_data"
-
     val rawRDD =  ReadData.readHive(sc, sql).map{ case Item(Array(goodsID, itemNo, category, band, price, attribute)) =>
-      (goodsID, itemNo, category, band, attribute, price) }
+                                                  (goodsID, itemNo, category, band, attribute, price) }
+    rawRDD.cache()
 
     // 计算每个类别的商品价格分布，分为 5 份，假设每个类别的商品价格数大于 5 个。
     val categoryRDD = rawRDD.map { case (goodsID, itemNo, category, band, attribute, price) => (category, price) }
-      .filter { case (category, price) => !price.equalsIgnoreCase("NULL") }
-      .map { case (category, price) => (category, Seq(price.toDouble)) }
-      .reduceByKey(_ ++ _)
-      .map { case (category, priceSeq) =>
-        val sortedSeq = priceSeq.distinct.sorted
-        val size = sortedSeq.size
-        // 0%, 20%, 40%, 60%, 80%
-        (category, List(0.0, sortedSeq(size * 2 / 10), sortedSeq(size * 4 / 10),
-          sortedSeq(size * 6 / 10), sortedSeq(size * 8 / 10)))
-      }
+                            .filter { case (category, price) => !price.equalsIgnoreCase("NULL") }
+                            .map { case (category, price) => (category, Seq(price.toDouble)) }
+                            .reduceByKey(_ ++ _)
+                            .map { case (category, priceSeq) =>
+                              val sortedSeq = priceSeq.distinct.sorted
+                              val size = sortedSeq.size
+                              // 0%, 20%, 40%, 60%, 80%
+                              (category, List(0.0, sortedSeq(size * 2 / 10), sortedSeq(size * 4 / 10),
+                                sortedSeq(size * 6 / 10), sortedSeq(size * 8 / 10)))
+                            }
 
-    // categoryRDD.take(50).foreach(println)
     val tf = rawRDD.map { case (goodsID, itemNo, category, brand, attribute, price) =>
-      (goodsID, (itemNo, category, brand, Seq(attribute), price))
-    }
-      // 搜集某个商品的属性
-      .reduceByKey((s1, s2) => {(s1._1, s1._2, s1._3, s1._4 ++ s2._4, s1._5)})
-      .map { case (goodsID, (itemNo, category, brand, attributes, price)) =>
-        (category, (itemNo, goodsID, brand, attributes, price))}
-      .join(categoryRDD)
-      .map { case (category, ((itemNo, goodsID, brand, attributes, price), priceArray)) =>
-        // 计算商品属性的 TF
-        val attrVector = calculatorTF(attributes, price, priceArray)
-        (category, (goodsID, itemNo, brand, attrVector))
-      }
+                          (goodsID, (itemNo, category, brand, Seq(attribute), price)) }
+                    // 搜集某个商品的属性
+                    .reduceByKey((s1, s2) => {(s1._1, s1._2, s1._3, s1._4 ++ s2._4, s1._5)})
+                    .map { case (goodsID, (itemNo, category, brand, attributes, price)) =>
+                      (category, (itemNo, goodsID, brand, attributes, price))}
+                    .join(categoryRDD)
+                    .map { case (category, ((itemNo, goodsID, brand, attributes, price), priceArray)) =>
+                      // 计算商品属性的 TF
+                      val attrVector = calculatorTF(attributes, price, priceArray)
+                      (category, (goodsID, itemNo, brand, attrVector))
+                    }
 
     //calculator IDF
     val idf: RDD[(String, Vector)] = tf.aggregateByKey(new DocumentFrequencyAggregator())(seqOp = (df, v) => df.add(v._4),
@@ -119,7 +111,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     if (redis) {
       val accumulator = sc.accumulator(0)
       saveToRedis(similarity, accumulator)
-      Message.addMessage(s"\t插入rcmd_sim_* :  $accumulator\n ")
+      Message.addMessage(s"\t插入 redis rcmd_sim_* :  $accumulator\n ")
     }
 
     if (hbase) {
@@ -146,6 +138,8 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     if (local) {
       similarity.first()
     }
+
+    rawRDD.unpersist()
 
   }
 

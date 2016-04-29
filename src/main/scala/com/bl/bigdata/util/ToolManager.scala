@@ -23,6 +23,7 @@ class ToolManager extends Tool {
 
   private def defaultJob(args: Array[String])  {
     if (args.length == 0) {
+      SparkFactory.getSparkContext()
       list += new BrowserGoodsSimilarity with ToolRunner // 看了又看
       list += new SeeBuyGoodsSimilarity with ToolRunner // 看了最终买
       list += new BuyGoodsSimilarity with ToolRunner // 买了还买
@@ -33,7 +34,7 @@ class ToolManager extends Tool {
       list += new GoodsForSale with ToolRunner // goods for sale
       list += new UserCookie with ToolRunner // 将用户 ID 和 cookieID 导入到 redis
       list += new GoodsNewArrival with ToolRunner // 新上线商品
-      list += new GoodsSimilarityInCate with ToolRunner // 同一类别商品的相似度
+//      list += new GoodsSimilarityInCate with ToolRunner // 同一类别商品的相似度
 //      list += new UserGoodsWeight with ToolRunner //
     } else {
       val map: Map[String, Tool] = Map("BrowserGoodsSimilarity".toLowerCase -> new BrowserGoodsSimilarity with ToolRunner,

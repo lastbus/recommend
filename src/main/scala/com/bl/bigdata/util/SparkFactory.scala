@@ -1,5 +1,6 @@
 package com.bl.bigdata.util
 
+import com.bl.bigdata.mail.Message
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkContext, SparkConf}
 
@@ -13,7 +14,7 @@ object SparkFactory {
   private[this] var hiveContext: HiveContext = _
 
   /** */
-  def getSparkContext(appName: String): SparkContext = {
+  def getSparkContext(appName: String = "recommend"): SparkContext = {
     if (sc == null) {
       val sparkConf = new SparkConf().setAppName(appName)
       val confFile = ConfigurationBL.get("extra.configuration.file", "")
@@ -26,6 +27,8 @@ object SparkFactory {
             sparkConf.set((property \ "name").text, (property \ "value").text)
         }
       sc = new SparkContext(sparkConf)
+      Message.addMessage("application-id: " + sc.applicationId)
+      Message.addMessage("application-master: " + sc.master)
       sc
     } else {
       // 如果sc已经初始化了，那么传递给spark集群的参数则对集群没有影响了
@@ -34,7 +37,7 @@ object SparkFactory {
   }
 
     def getSparkContext: SparkContext = {
-      if (sc == null) getSparkContext("recommend")
+      if (sc == null) getSparkContext()
       else sc
     }
 
