@@ -48,9 +48,10 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     val sc = SparkFactory.getSparkContext("同类商品属性相似度")
     val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
       " from recommendation.product_properties_raw_data"
+
     val rawRDD =  ReadData.readHive(sc, sql).map{ case Item(Array(goodsID, itemNo, category, band, price, attribute)) =>
                                                   (goodsID, itemNo, category, band, attribute, price) }
-    rawRDD.cache()
+
 
     // 计算每个类别的商品价格分布，分为 5 份，假设每个类别的商品价格数大于 5 个。
     val categoryRDD = rawRDD.map { case (goodsID, itemNo, category, band, attribute, price) => (category, price) }
