@@ -26,6 +26,7 @@ class BrowserGoodsSimilarity extends Tool {
   }
 
   override def run(args: Array[String]): Unit = {
+    logger.info("看了又看开始计算.....")
     Message.addMessage("看了又看:\n")
     val output = ConfigurationBL.get("recmd.output")
     val prefix = ConfigurationBL.get("browser.again")
@@ -42,46 +43,51 @@ class BrowserGoodsSimilarity extends Tool {
       "from recommendation.user_behavior_raw_data  where dt >= " + start
 
     val rawRdd = ReadData.readHive(sc, sql).map{ case Item(Array(cookie, category, date, behaviorId, goodsId)) =>
-      (cookie, category, date.substring(0, date.indexOf(" ")), behaviorId, goodsId)}
-      .filter(_._4 == "1000")
-      .map { case (cookie, category, date, behaviorId, goodsId) => ((cookie, category, date), goodsId)}
-      .filter(v => {
-        if (v._1._2.trim.length == 0) false
-        else if (v._1._2.equalsIgnoreCase("NULL")) false
-        else true})
-      .distinct()
+                                              (cookie, category, date.substring(0, date.indexOf(" ")), behaviorId, goodsId) }
+                                            .filter(_._4 == "1000")
+                                            .map { case (cookie, category, date, behaviorId, goodsId) => ((cookie, category, date), goodsId)}
+                                            .filter(v => {
+                                              if (v._1._2.trim.length == 0) false
+                                              else if (v._1._2.equalsIgnoreCase("NULL")) false
+                                              else true })
+                                            .distinct()
     rawRdd.cache()
     // 将用户看过的商品两两结合在一起
     val tuple = rawRdd.join(rawRdd).filter { case (k, (v1, v2)) => v1 != v2 }
-      .map { case (k, (goodId1, goodId2)) => (goodId1, goodId2) }
+                                    .map { case (k, (goodId1, goodId2)) => (goodId1, goodId2) }
     // 计算浏览商品 (A,B) 的次数
     val tupleFreq = tuple.map((_, 1)).reduceByKey(_ + _)
     // 计算浏览每种商品的次数
     val good2Freq = rawRdd.map(_._2).map((_, 1)).reduceByKey(_ + _)
     val good1Good2Similarity = tupleFreq.map { case ((good1, good2), freq) => (good2, (good1, freq)) }
-      .join(good2Freq)
-      .map { case (good2, ((good1, freq), good2Freq1)) => (good1, Seq((good2, freq.toDouble / good2Freq1))) }
-      .reduceByKey((s1, s2) => s1 ++ s2)
-      .mapValues(v => { accumulator += 1; v.sortWith(_._2 > _._2).take(20) })
-      .map { case (goods1, goods2) => (prefix + goods1, goods2.map(_._1).mkString("#")) }
-    rawRdd.unpersist()
+                                        .join(good2Freq)
+                                        .map { case (good2, ((good1, freq), good2Freq1)) => (good1, Seq((good2, freq.toDouble / good2Freq1))) }
+                                        .reduceByKey((s1, s2) => s1 ++ s2)
+                                        .mapValues(v => v.sortWith(_._2 > _._2).take(20))
+                                        .map { case (goods1, goods2) => {accumulator += 1; (prefix + goods1, goods2.map(_._1).mkString("#")) }}
+
     // 保存到 redis 中
     if (redis) {
       saveToRedis(good1Good2Similarity, accumulator2)
       Message.addMessage(s"\t\t$prefix*: $accumulator\n")
       Message.addMessage(s"\t\t插入 redis $prefix*: $accumulator2\n")
     }
-
+    rawRdd.unpersist()
+    logger.info("看了又看计算结束。")
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
     rdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
-      partition.foreach(s => {
-        accumulator += 1
-        jedis.set(s._1, s._2)
-      })
-      jedis.close()
+      try {
+        val jedis = RedisClient.pool.getResource
+        partition.foreach(s => {
+          jedis.set(s._1, s._2)
+          accumulator += 1
+        })
+        jedis.close()
+      } catch {
+        case e: Exception => Message.addMessage(e.getMessage)
+      }
     })
   }
 

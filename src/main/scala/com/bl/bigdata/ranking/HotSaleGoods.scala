@@ -17,6 +17,7 @@ import org.apache.spark.rdd.RDD
 class HotSaleGoods extends Tool {
 
   override def run(args: Array[String]): Unit = {
+    logger.info("品类热销开始计算........")
     Message.addMessage("\n品类热销商品：\n")
     val output = ConfigurationBL.get("recmd.output")
     val prefix = ConfigurationBL.get("hot.sale")
@@ -33,24 +34,22 @@ class HotSaleGoods extends Tool {
     val date = new Date
     val start = sdf.format(new Date(date.getTime - 24000L * 3600 * 60))
     val sql = s"select goods_sid, goods_name, quanlity, event_date, category_sid " +
-      s" from recommendation.user_behavior_raw_data where dt >= $start"
+              s" from recommendation.user_behavior_raw_data where dt >= $start"
 
-    val result = ReadData.readHive(sc, sql).map{ case Item(Array(goodsID, goodsName, sale_num, sale_time, categoryID)) =>
-      (goodsID, goodsName, sale_num.toInt, sale_time, categoryID) }
-      .map { case (goodsID, goodsName, sale_num, sale_time, categoryID) =>
-        (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID))
-      }.reduceByKey((s1, s2) => (s1._1, s1._2 + s2._2, s1._3))
-      .map { case (goodsID, (goodsName, sale_num, categoryID)) =>
-        (categoryID, Seq((goodsID, sale_num)))
-      }
-      .reduceByKey((s1, s2) =>s1 ++ s2)
-      .map { case (category, seq) => {accumulator += 1; (prefix + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#"))} }
+    val result = ReadData.readHive(sc, sql)
+                          .map { case Item(Array(goodsID, goodsName, sale_num, sale_time, categoryID)) =>
+                                      (goodsID, goodsName, sale_num.toInt, sale_time, categoryID) }
+                          .map { case (goodsID, goodsName, sale_num, sale_time, categoryID) =>
+                                      (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID))}
+                          .reduceByKey((s1, s2) => (s1._1, s1._2 + s2._2, s1._3))
+                          .map { case (goodsID, (goodsName, sale_num, categoryID)) =>
+                                      (categoryID, Seq((goodsID, sale_num)))}
+                          .reduceByKey((s1, s2) =>s1 ++ s2)
+                          .map { case (category, seq) => {accumulator += 1; (prefix + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) }}
     result.cache()
     if(redis) {
-      logger.info("start to write 热销 to redis.")
 //      sc.toRedisKV(result)
       saveToRedis(result, accumulator2)
-      logger.info("write finished.")
       Message.addMessage(s"\t$prefix*: $accumulator\n")
       Message.addMessage(s"\t插入 redis $prefix*: $accumulator2\n")
     }
@@ -73,16 +72,21 @@ class HotSaleGoods extends Tool {
 
     }
     result.unpersist()
+    logger.info("品类热销计算结束。")
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
     rdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
-      partition.foreach(s => {
-        accumulator += 1
-        jedis.set(s._1, s._2)
-      })
-      jedis.close()
+      try {
+        val jedis = RedisClient.pool.getResource
+        partition.foreach(s => {
+          jedis.set(s._1, s._2)
+          accumulator += 1
+        })
+        jedis.close()
+      } catch {
+        case e: Exception => Message.addMessage(e.getMessage)
+      }
     })
   }
 }

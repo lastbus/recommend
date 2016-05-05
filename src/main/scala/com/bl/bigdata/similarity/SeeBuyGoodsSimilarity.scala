@@ -18,6 +18,7 @@ import org.apache.spark.rdd.RDD
 class SeeBuyGoodsSimilarity extends Tool {
 
   override def run(args: Array[String]): Unit = {
+    logger.info("看了最终买开始计算.....")
     Message.message.append("看了最终买:\n")
     val output = ConfigurationBL.get("recmd.output")
     val prefix = ConfigurationBL.get("see.buy")
@@ -34,21 +35,22 @@ class SeeBuyGoodsSimilarity extends Tool {
     val accumulator2 = sc.accumulator(0)
 
     val rawData = ReadData.readHive(sc, sql).map{ case Item(Array(cookie, category, date, behaviorId, goodsId)) =>
-      ((cookie, category, date.substring(0, date.indexOf(" "))), behaviorId, goodsId)}
+                                            ((cookie, category, date.substring(0, date.indexOf(" "))), behaviorId, goodsId)}
     // 用户浏览的商品
     val browserRdd = rawData.filter { case ((cookie, category, date), behavior, goodsID) => behavior.equals("1000") }
-  .map { case ((cookie, category, date), behavior, goodsID) => ((cookie, category, date), goodsID) }.distinct()
+                             .map { case ((cookie, category, date), behavior, goodsID) => ((cookie, category, date), goodsID) }.distinct()
     // 用户购买的商品
     val buyRdd = rawData.filter { case ((cookie, category, date), behavior, goodsID) => behavior.equals("4000") }
-      .map { case ((cookie, category, date), behavior, goodsID) => ((cookie, category, date), goodsID) }.distinct()
+                         .map { case ((cookie, category, date), behavior, goodsID) => ((cookie, category, date), goodsID) }.distinct()
 
     // 计算用户浏览和购买的商品之间的相似性：（浏览的商品A， 购买的商品B）的频率除以 B 的频率
     val browserAndBuy = browserRdd.join(buyRdd)
-      .map{ case ((cookie, category, date), (goodsIDBrowser, goodsIDBuy)) => ((goodsIDBrowser, goodsIDBuy), 1)}
-      .reduceByKey(_ + _)
-      .map{ case ((goodsBrowser, goodsBuy), relation) => (goodsBrowser, Seq((goodsBuy, relation)))}
-      .reduceByKey((s1, s2) =>  s1 ++ s2)
-      .map(s => { accumulator += 1;(prefix + s._1, s._2.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) })
+                                  .map{ case ((cookie, category, date), (goodsIDBrowser, goodsIDBuy)) => ((goodsIDBrowser, goodsIDBuy), 1)}
+                                  .filter(item => item._1._1 != item._1._2) // 浏览和购买不能是同一个商品，shit
+                                  .reduceByKey(_ + _)
+                                  .map{ case ((goodsBrowser, goodsBuy), relation) => (goodsBrowser, Seq((goodsBuy, relation)))}
+                                  .reduceByKey((s1, s2) =>  s1 ++ s2)
+                                  .map(s => {accumulator += 1; (prefix + s._1, s._2.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) })
     browserAndBuy.cache()
 
     // 如果是本地运行，则直接输出，否则保存在 hadoop 中。
@@ -60,16 +62,21 @@ class SeeBuyGoodsSimilarity extends Tool {
     }
 //      sc.toRedisKV(browserAndBuy)
     browserAndBuy.unpersist()
+    logger.info("看了最终买计算结束。")
   }
 
-  def saveToRedis2(rdd: RDD[(String, String)], c: Accumulator[Int]): Unit = {
+  def saveToRedis2(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
     rdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
-      partition.foreach(s => {
-        jedis.set(s._1, s._2)
-        c += 1
-      })
-      jedis.close()
+      try {
+        val jedis = RedisClient.pool.getResource
+        partition.foreach(s => {
+          jedis.set(s._1, s._2)
+          accumulator += 1
+        })
+        jedis.close()
+      } catch {
+        case e: Exception => Message.addMessage(e.getMessage)
+      }
     })
 
   }

@@ -24,21 +24,20 @@ import scala.collection.mutable._
 class GoodsNewArrival extends Tool {
 
   override def run(args: Array[String]): Unit = {
+    logger.info("新品上市开始计算........")
     Message.addMessage("\n新商品上市：\n")
     val prefixPC = ConfigurationBL.get("goods.new.arrival.prefix.pc")
     val prefixAPP = ConfigurationBL.get("goods.new.arrival.prefix.app")
-
     val sc = SparkFactory.getSparkContext("goods new arrival")
-
     val sql = "select sid, pro_sid, brand_sid, category_id, channel_sid, sell_start_date " +
-      "from recommendation.goods_new_arrival"
+              "from recommendation.goods_new_arrival"
 
     val nowMills = new Date().getTime
     val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
     val rawData = ReadData.readHive(sc, sql)
-      .map { case Item(Array(sid, productID, bandID, categoryID, channelID, onlineTime)) =>
-        (bandID, sid, productID, categoryID, channelID, (nowMills - sdf.parse(onlineTime).getTime) / 1000)
-      }.cache()
+                          .map { case Item(Array(sid, productID, bandID, categoryID, channelID, onlineTime)) =>
+                                    (bandID, sid, productID, categoryID, channelID, (nowMills - sdf.parse(onlineTime).getTime) / 1000)}
+                          .cache()
     val pcRDD = rawData.filter(_._5 == "3").map(s => (s._1, s._2,s._3,s._4,s._6))
     val appRDD = rawData.filter(_._5 == "1").map(s => (s._1, s._2,s._3,s._4,s._6))
 
@@ -52,6 +51,7 @@ class GoodsNewArrival extends Tool {
     saveToRedis(appResult, appAccumulator)
     Message.addMessage(s"\tpc: 插入 redis $prefixAPP* :\t $appAccumulator")
 
+    logger.info("新品上市计算结束。")
   }
 
   /** 参数依次为： band_id, sid, product_id, category_id, time before now */
@@ -66,17 +66,16 @@ class GoodsNewArrival extends Tool {
 
     // 根据每个band上线的商品数在所属category的占比，取一定数量的商品，至少取一个。
     val pickGoods = rdd.map{ case (bandID, sid, productID, categoryID, delt) =>
-      ((bandID, categoryID), Seq((sid, productID, delt))) }
-      .reduceByKey(_ ++ _).map { case (band, prodSeq) => {
-      val bandMap = bandMapBroadCast.value
-      val categoryMap = categoryMapBroadCast.value
-      // 每个品牌取的个数正比与 品牌上线的商品数 / 品牌所属的category上线的商品总数
-      val num = Math.ceil(bandMap(band._1).toDouble / categoryMap(band._2).toDouble).toInt
-      (band, distinct(prodSeq).sortWith(_._3 < _._3).distinct.take(num))
-    }
-    }
-      .map{case ((band, category), prodSeq) => for (p <- prodSeq) yield (category, Seq((band, p)))}
-      .flatMap(s=>s).reduceByKey(_ ++ _)
+                                ((bandID, categoryID), Seq((sid, productID, delt))) }
+                        .reduceByKey(_ ++ _)
+                        .map { case (band, prodSeq) =>
+                                  val bandMap = bandMapBroadCast.value
+                                  val categoryMap = categoryMapBroadCast.value
+                                  // 每个品牌取的个数正比与 品牌上线的商品数 / 品牌所属的category上线的商品总数
+                                  val num = Math.ceil(bandMap(band._1).toDouble / categoryMap(band._2).toDouble).toInt
+                                  (band, distinct(prodSeq).sortWith(_._3 < _._3).distinct.take(num))}
+                        .map{case ((band, category), prodSeq) => for (p <- prodSeq) yield (category, Seq((band, p)))}
+                        .flatMap(s=>s).reduceByKey(_ ++ _)
 
     val result = pickGoods.map { case (bandID, prodSeq) => (bandID, prodSeq.sortWith(_._2._3 < _._2._3).map(_._2._1).mkString("#")) }
     result
@@ -98,13 +97,17 @@ class GoodsNewArrival extends Tool {
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
     val expireTime = ConfigurationBL.get("goods.new.arrival.expire", "604800").toInt
     rdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
-      partition.foreach(s => {
-        accumulator += 1
-        jedis.set(s._1, s._2)
-        jedis.expire(s._1, expireTime) // 过期时间 2 周
-      })
-      jedis.close()
+      try {
+        val jedis = RedisClient.pool.getResource
+        partition.foreach(s => {
+          jedis.set(s._1, s._2)
+          jedis.expire(s._1, expireTime.toInt)
+          accumulator += 1
+        })
+        jedis.close()
+      } catch {
+        case e: Exception => Message.addMessage(e.getMessage)
+      }
     })
   }
 

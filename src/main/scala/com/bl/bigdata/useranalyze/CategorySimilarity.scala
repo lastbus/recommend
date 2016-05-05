@@ -21,8 +21,8 @@ import org.apache.spark.rdd.RDD
   */
 class CategorySimilarity extends Tool {
 
-  def run(args: Array[String]): Unit ={
-    logger.info("starting to calculator buy goods similarity.")
+  def run(args: Array[String]): Unit = {
+    logger.info("品类买了还买开始计算......")
     Message.addMessage("品类买了还买:\n")
     val outPath = ConfigurationBL.get("recmd.output")
     val prefix = ConfigurationBL.get("category.category")
@@ -36,53 +36,59 @@ class CategorySimilarity extends Tool {
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date0 = new Date
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
-    val sql = "select category_sid, cookie_id, event_date, behavior_type, goods_sid from recommendation.user_behavior_raw_data  " +
-      s"where dt >= $start"
+    val sql = "select category_sid, cookie_id, event_date, behavior_type, goods_sid  " +
+              "from recommendation.user_behavior_raw_data  " +
+              s"where dt >= $start"
 
-    val buyGoodsRDD = ReadData.readHive(sc, sql).map{ case Item(Array(category, cookie, date, behaviorId, goodsId)) =>
-      (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}
-      .filter(_._2._3 == "4000")
-      .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }.distinct()
+    val buyGoodsRDD = ReadData.readHive(sc, sql)
+                              .map{ case Item(Array(category, cookie, date, behaviorId, goodsId)) =>
+                                          (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}
+                              .filter(_._2._3 == "4000")
+                              .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }
+                              .distinct()
 
     val sql2 = "select category_id, level2_id from recommendation.dim_category"
-    val categoriesRDD = ReadData.readHive(sc, sql2).map{ case Item(Array(category, level)) => (category, level)}.
-      distinct()
-
+    val categoriesRDD = ReadData.readHive(sc, sql2).map{ case Item(Array(category, level)) => (category, level)}.distinct()
+    // 将商品的末级类别用一级类别替换
     val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)
-      // 将商品的末级类别用一级类别替换
-      .map{ case (category, ((cookie, date, goodsID), kind)) => ((cookie, date, kind), category)}
+                                      .map { case (category, ((cookie, date, goodsID), kind)) => ((cookie, date, kind), category) }
     // 统计每种物品的购买数量
-    val buyCount = buyGoodsKindRDD.map{ case ((cookie, date, kind), goodsID) => (goodsID, 1)}.reduceByKey(_ + _)
-
+    val buyCount = buyGoodsKindRDD.map { case ((cookie, date, kind), goodsID) => (goodsID, 1)}.reduceByKey(_ + _)
     // 计算用户购买物品在同一类别下的关联度
     val result0 = buyGoodsKindRDD.join(buyGoodsKindRDD)
-      .filter{ case ((cookie, date, kind), (goodsID1, goodsID2)) => goodsID1 != goodsID2}
-      .map{ case ((cookie, date, kind), (goodsID1, goodsID2)) => ((goodsID1, goodsID2), 1)}.reduceByKey(_ + _)
-      .map{ case ((goodsID1, goodsID2), count) => (goodsID2, (goodsID1, count))}
+                                  .filter { case ((cookie, date, kind), (goodsID1, goodsID2)) => goodsID1 != goodsID2}
+                                  .map { case ((cookie, date, kind), (goodsID1, goodsID2)) => ((goodsID1, goodsID2), 1)}
+                                  .reduceByKey(_ + _)
+                                  .map { case ((goodsID1, goodsID2), count) => (goodsID2, (goodsID1, count))}
 
     val result = result0.join(buyCount)
-      .map{ case (goodsID2, ((goodsID1, count), goodsID2Count)) => (goodsID1, goodsID2, count.toDouble / goodsID2Count)}
-    val sorting = result.map{ case (goodsID1, goodsID2, similarity) => (goodsID1, Seq((goodsID2, similarity)))}
-      .reduceByKey((s1, s2) => s1 ++ s2).mapValues(seq => {accumulator += 1; seq.sortWith(_._2 > _._2).map(_._1).mkString("#")})
-
+                        .map { case (goodsID2, ((goodsID1, count), goodsID2Count)) => (goodsID1, goodsID2, count.toDouble / goodsID2Count)}
+    val sorting = result.map { case (goodsID1, goodsID2, similarity) => (goodsID1, Seq((goodsID2, similarity)))}
+                        .reduceByKey((s1, s2) => s1 ++ s2)
+                        .mapValues(seq => { accumulator += 1; seq.sortWith(_._2 > _._2).map(_._1).mkString("#")})
+    sorting.persist()
     if (redis) {
-      logger.info(s"output result to redis, host: ${ConfigurationBL.get("redis.host")}.")
 //      sc.toRedisKV(sorting.map(s => ("rcmd_bab_category_" + s._1, s._2)))
       saveToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2)
-      logger.info("finished to output to redis.")
       Message.message.append(s"\t$prefix*: $accumulator\n")
       Message.message.append(s"\t插入 redis $prefix*: $accumulator2\n")
     }
+    sorting.unpersist()
+    logger.info("品类买了还买计算结束。")
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
     rdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
-      partition.foreach(s => {
-        accumulator += 1
-        jedis.set(s._1, s._2)
-      })
-      jedis.close()
+      try {
+        val jedis = RedisClient.pool.getResource
+        partition.foreach(s => {
+          jedis.set(s._1, s._2)
+          accumulator += 1
+        })
+        jedis.close()
+      } catch {
+        case e: Exception => Message.addMessage(e.getMessage)
+      }
     })
   }
 }

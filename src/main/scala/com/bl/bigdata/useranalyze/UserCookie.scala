@@ -12,27 +12,37 @@ import org.apache.spark.rdd.RDD
 class UserCookie extends Tool {
 
   override def run(args: Array[String]): Unit = {
-    Message.addMessage("\n将用户id 和 cookie id 导入 redis：\n")
+    logger.info("用户cookie 和用户id 开始计算......")
+    Message.addMessage("\n用户id 和 cookie \n")
     val sc = SparkFactory.getSparkContext("user cookie")
+    val count = sc.accumulator(0)
+    val count2 = sc.accumulator(0)
     val sql = "select registration_id, cookie_id, event_date from recommendation.memberid_cookieid"
     val rawRDD = ReadData.readHive(sc, sql).map{ case Item(Array(registration, cookie, date)) => (registration, cookie, date) }
     val r = rawRDD.map(r => (r._1, Seq((r._2, r._3)))).reduceByKey(_ ++ _)
-      .map(r => ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).distinct.mkString("#")))
-    val count = sc.accumulator(0)
-    saveListToRedis(r, count)
-    Message.addMessage(s"\t导入 redis 条数： $count \n")
+                  .map(r => { count += 1;
+                    ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).distinct.mkString("#"))})
+    saveListToRedis(r, count2)
+    Message.addMessage(s"\t member_cookie_*： $count \n")
+    Message.addMessage(s"\t插入 redis member_cookie_*： $count2 \n")
+
+    logger.info("用户cookie 和用户id 计算结束。")
   }
 
 
 
   def saveListToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
     rdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
-      partition.foreach(s => {
-        accumulator += 1
-        jedis.set(s._1, s._2)
-      })
-      jedis.close()
+      try {
+        val jedis = RedisClient.pool.getResource
+        partition.foreach(s => {
+          jedis.set(s._1, s._2)
+          accumulator += 1
+        })
+        jedis.close()
+      } catch {
+        case e: Exception => Message.addMessage(e.getMessage)
+      }
     })
   }
 

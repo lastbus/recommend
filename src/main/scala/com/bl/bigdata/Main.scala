@@ -14,6 +14,7 @@ object Main {
     ConfigurationBL.init()
     val toolManager = new ToolManager with Timer
     toolManager.run(args)
+    SparkFactory.destroyResource()
   }
 
 }

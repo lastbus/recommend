@@ -35,9 +35,9 @@ class GoodsSimilarityInCate extends Tool with Serializable {
   val featuresNum = 1 << 16
 
   override def run(args: Array[String]): Unit = {
+    logger.info("同类商品属性的相似性开始计算.........")
     Message.addMessage("\n同类商品属性的相似性：\n")
     val output = ConfigurationBL.get("recmd.output")
-    val local = output.contains("local")
     val redis = output.contains("redis")
     val hbase = output.contains("hbase")
 
@@ -118,9 +118,6 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     if (hbase) {
       // save to hbase
       val hBaseConf = HBaseConfiguration.create()
-      hBaseConf.set("hbase.zookeeper.property.clientPort", "2181")
-      hBaseConf.set("hbase.zookeeper.quorum", "slave14.bl.com,master11.bl.com,slave15.bl.com,slave13.bl.com,master12.bl.com")
-
       hBaseConf.set(TableOutputFormat.OUTPUT_TABLE, table)
       val job = Job.getInstance(hBaseConf)
       job.setOutputKeyClass(classOf[ImmutableBytesWritable])
@@ -136,12 +133,8 @@ class GoodsSimilarityInCate extends Tool with Serializable {
       }
         .saveAsNewAPIHadoopDataset(job.getConfiguration)
     }
-    if (local) {
-      similarity.first()
-    }
-
     rawRDD.unpersist()
-
+    logger.info("同类商品属性的相似性计算结束。")
   }
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {

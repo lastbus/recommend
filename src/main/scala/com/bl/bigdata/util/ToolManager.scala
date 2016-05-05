@@ -3,6 +3,7 @@ package com.bl.bigdata.util
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.product.GoodsNewArrival
 import com.bl.bigdata.ranking.{GoodsForSale, HotSaleGoods}
+import com.bl.bigdata.search.Search
 import com.bl.bigdata.similarity.{BuyGoodsSimilarity, SeeBuyGoodsSimilarity, BrowserGoodsSimilarity}
 import com.bl.bigdata.tfidf.GoodsSimilarityInCate
 import com.bl.bigdata.useranalyze._
@@ -14,7 +15,7 @@ import scala.collection.mutable.ListBuffer
  */
 class ToolManager extends Tool {
 
-  val list = new ListBuffer[Tool]
+  private val list = new ListBuffer[Tool]
 
   override def run(args: Array[String]): Unit = {
     defaultJob(args)
@@ -48,7 +49,9 @@ class ToolManager extends Tool {
         "GoodsSimilarityInCate".toLowerCase -> new GoodsSimilarityInCate with ToolRunner,
         "UserCookie".toLowerCase -> new UserCookie with ToolRunner,
         "UserGoodsWeight".toLowerCase -> new UserGoodsWeight with ToolRunner,
-        "GoodsNewArrival".toLowerCase -> new GoodsNewArrival with ToolRunner)
+        "GoodsNewArrival".toLowerCase -> new GoodsNewArrival with ToolRunner,
+          "als" -> new Guess with ToolRunner,
+          "search" -> new Search with ToolRunner)
       for (arg <- args; key = arg.toLowerCase if map.contains(key)) list += map(key)
     }
   }
