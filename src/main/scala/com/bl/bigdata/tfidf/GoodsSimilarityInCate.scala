@@ -1,7 +1,7 @@
 package com.bl.bigdata.tfidf
 
 import breeze.linalg.{SparseVector => BSV, norm}
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.hadoop.hbase.HBaseConfiguration
@@ -49,7 +49,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
       " from recommendation.product_properties_raw_data"
 
-    val rawRDD =  ReadData.readHive(sc, sql).map{ case Item(Array(goodsID, itemNo, category, band, price, attribute)) =>
+    val rawRDD =  ReadData.readHive(sc, sql).map{ case Array(goodsID, itemNo, category, band, price, attribute) =>
                                                   (goodsID, itemNo, category, band, attribute, price) }
 
 

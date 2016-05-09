@@ -3,7 +3,7 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
@@ -34,7 +34,7 @@ class SeeBuyGoodsSimilarity extends Tool {
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
-    val rawData = ReadData.readHive(sc, sql).map{ case Item(Array(cookie, category, date, behaviorId, goodsId)) =>
+    val rawData = ReadData.readHive(sc, sql).map{ case Array(cookie, category, date, behaviorId, goodsId) =>
                                             ((cookie, category, date.substring(0, date.indexOf(" "))), behaviorId, goodsId)}
     // 用户浏览的商品
     val browserRdd = rawData.filter { case ((cookie, category, date), behavior, goodsID) => behavior.equals("1000") }

@@ -3,7 +3,7 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import redis.clients.jedis.Jedis
@@ -35,7 +35,7 @@ class BuyActivityStatistic extends Tool {
     val sql = "select category_sid, event_date, behavior_type from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start"
     val rawRDD = ReadData.readHive(sc, sql)
-                          .map{ case Item(Array(category, date1, behavior)) =>
+                          .map{ case Array(category, date1, behavior) =>
                                     (category, date1.substring(date1.indexOf(" ") + 1), behavior)}
                           .filter{ case (category, time, behavior) => behavior.equals("4000") && !category.equalsIgnoreCase("NULL")}
                           .map{ case (category, time, behavior) => (category, time)}

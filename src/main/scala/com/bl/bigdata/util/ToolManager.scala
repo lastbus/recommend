@@ -68,6 +68,7 @@ class ToolManager extends Tool {
       } catch {
         case e: Exception =>
           Message.addMessage(s"运行出错： ${tool.getClass.getName} \n${e.getMessage}\n\n\n")
+          logger.error(s"运行出错： ${tool.getClass.getName} \n${e.getMessage}")
           Thread.sleep(5 * 1000)
       }
     }

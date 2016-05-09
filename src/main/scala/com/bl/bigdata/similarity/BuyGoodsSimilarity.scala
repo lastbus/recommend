@@ -3,7 +3,7 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
@@ -37,7 +37,7 @@ class BuyGoodsSimilarity extends Tool{
       s"where dt >= $start"
 
     val buyGoodsRDD = ReadData.readHive(sc, sql)
-                              .map{ case Item(Array(category, cookie, date, behaviorId, goodsId)) =>
+                              .map{ case Array(category, cookie, date, behaviorId, goodsId) =>
                                             (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}
                               .filter(_._2._3 == "4000")
                               .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }
@@ -45,7 +45,7 @@ class BuyGoodsSimilarity extends Tool{
 
     val sql2 = "select category_id, level2_id from recommendation.dim_category"
     val categoriesRDD = ReadData.readHive(sc, sql2)
-                                .map{ case Item(Array(category, level)) => (category, level)}
+                                .map{ case Array(category, level) => (category, level)}
                                 .distinct().map(s => (s._1.toString, s._2.toString))
     // 将商品的末级类别用一级类别替换
     val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)

@@ -3,7 +3,7 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.util.{ConfigurationBL, SparkFactory, Tool}
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.Put
@@ -28,7 +28,7 @@ class UserGoodsWeight extends Tool {
               " left join recommendation.goods_avaialbe_for_sale_channel g on u.goods_sid = g.sid "
 
     val rawRDD = ReadData.readHive(sc, sql)
-    val trainRDD = rawRDD.map{ case Item(Array(cookie, category, brand, behavior)) =>
+    val trainRDD = rawRDD.map{ case Array(cookie, category, brand, behavior) =>
                                       (cookie, category, brand, behavior)}
                           .filter(s => s._4 == "1000" | s._4 == "2000" | s._4 == "3000" | s._4 == "4000")
                           .map(s => (s._1, s._2, s._3, getRating(s._4)))

@@ -3,7 +3,7 @@ package com.bl.bigdata.ranking
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
@@ -37,7 +37,7 @@ class HotSaleGoods extends Tool {
               s" from recommendation.user_behavior_raw_data where dt >= $start"
 
     val result = ReadData.readHive(sc, sql)
-                          .map { case Item(Array(goodsID, goodsName, sale_num, sale_time, categoryID)) =>
+                          .map { case Array(goodsID, goodsName, sale_num, sale_time, categoryID) =>
                                       (goodsID, goodsName, sale_num.toInt, sale_time, categoryID) }
                           .map { case (goodsID, goodsName, sale_num, sale_time, categoryID) =>
                                       (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID))}

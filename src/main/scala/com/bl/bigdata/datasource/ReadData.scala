@@ -10,9 +10,9 @@ import org.apache.spark.{SparkConf, SparkContext}
 object ReadData {
 
 
-  def readHive(sc: SparkContext, sql: String): RDD[Item] = {
+  def readHive(sc: SparkContext, sql: String): RDD[Array[String]] = {
     val hiveContext = SparkFactory.getHiveContext
-    hiveContext.sql(sql).rdd.map(row => if (row.anyNull) null else Item(row.toSeq.map(_.toString).toArray))
+    hiveContext.sql(sql).rdd.map(row => if (row.anyNull) null else row.toSeq.map(_.toString).toArray)
       .filter(_ != null)
   }
 

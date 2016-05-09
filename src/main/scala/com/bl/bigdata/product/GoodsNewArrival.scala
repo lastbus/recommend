@@ -3,7 +3,7 @@ package com.bl.bigdata.product
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util.{ConfigurationBL, RedisClient, SparkFactory, Tool}
 import org.apache.spark.Accumulator
@@ -35,7 +35,7 @@ class GoodsNewArrival extends Tool {
     val nowMills = new Date().getTime
     val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
     val rawData = ReadData.readHive(sc, sql)
-                          .map { case Item(Array(sid, productID, bandID, categoryID, channelID, onlineTime)) =>
+                          .map { case Array(sid, productID, bandID, categoryID, channelID, onlineTime) =>
                                     (bandID, sid, productID, categoryID, channelID, (nowMills - sdf.parse(onlineTime).getTime) / 1000)}
                           .cache()
     val pcRDD = rawData.filter(_._5 == "3").map(s => (s._1, s._2,s._3,s._4,s._6))

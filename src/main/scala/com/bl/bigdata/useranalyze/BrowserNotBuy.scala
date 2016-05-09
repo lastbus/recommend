@@ -3,7 +3,7 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
@@ -30,7 +30,7 @@ class BrowserNotBuy extends Tool {
               " from recommendation.user_behavior_raw_data  " +
               s"where dt >= $start"
 
-    val a = ReadData.readHive(sc, sql).map { case Item(Array(cookie, date, behavior, category, goods)) =>
+    val a = ReadData.readHive(sc, sql).map { case Array(cookie, date, behavior, category, goods) =>
                                                   ((cookie, date.substring(0, date.indexOf(" "))), behavior, (category, goods)) }
 
     val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000")}

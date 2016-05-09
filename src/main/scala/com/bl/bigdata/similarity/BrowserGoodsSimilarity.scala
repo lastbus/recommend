@@ -3,7 +3,7 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
@@ -42,7 +42,7 @@ class BrowserGoodsSimilarity extends Tool {
     val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_sid  " +
       "from recommendation.user_behavior_raw_data  where dt >= " + start
 
-    val rawRdd = ReadData.readHive(sc, sql).map{ case Item(Array(cookie, category, date, behaviorId, goodsId)) =>
+    val rawRdd = ReadData.readHive(sc, sql).map{ case Array(cookie, category, date, behaviorId, goodsId) =>
                                               (cookie, category, date.substring(0, date.indexOf(" ")), behaviorId, goodsId) }
                                             .filter(_._4 == "1000")
                                             .map { case (cookie, category, date, behaviorId, goodsId) => ((cookie, category, date), goodsId)}

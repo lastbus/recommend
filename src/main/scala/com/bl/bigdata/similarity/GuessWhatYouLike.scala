@@ -4,7 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.{Date, NoSuchElementException}
 
 import com.bl.bigdata.SparkEnv
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.util._
 import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rating}
 import org.apache.spark.rdd._
@@ -33,7 +33,7 @@ class GuessWhatYouLike extends Tool with SparkEnv{
         val start = sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
         val sql = s"select cookie_id, behavior_type, goods_sid, goods_name, dt from recommendation.user_behavior_raw_data where dt >= $start "
         val ratingsCache = ReadData.readHive(sc, sql)
-          .map{case Item(Array(cookie, behavior, goodsID, goodsName, dt)) => (cookie, goodsID, goodsName, behavior, dt)}
+          .map{case Array(cookie, behavior, goodsID, goodsName, dt) => (cookie, goodsID, goodsName, behavior, dt)}
           .cache()
 //        val ratingsFilePath = args(0).trim
 //        val ratingsCache =sc.textFile(ratingsFilePath).map { line =>

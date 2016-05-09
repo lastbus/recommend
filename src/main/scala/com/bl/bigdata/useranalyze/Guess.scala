@@ -3,7 +3,7 @@ package com.bl.bigdata.useranalyze
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.{Item, ReadData}
+import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.hadoop.conf.Configuration
@@ -13,6 +13,7 @@ import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rat
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{Accumulator, SparkContext}
+
 import scala.collection.JavaConversions._
 
 /**
@@ -51,7 +52,7 @@ class Guess extends Tool {
 
     // 过滤得到浏览、购买、加入购物车等等操作
     val ratingRDD = rawRDD.coalesce(executorCores * executorNum, true)
-                          .map { case Item(Array(cookie_id, behavior_type, goods_sid, dt)) =>
+                          .map { case Array(cookie_id, behavior_type, goods_sid, dt) =>
                             (cookie_id, (behavior_type, goods_sid, dt)) }
                           .filter (s => s._2._1 == "1000" || s._2._1 == "2000" ||s._2._1 == "3000" || s._2._1 == "4000" )
     ratingRDD.persist()
@@ -120,10 +121,9 @@ class Guess extends Tool {
     val initValue = new Array[(Long, Double)](takeNum).map(s => (-1L, 0.0))
     val aggregate = (init: Array[(Long, Double)], toBeAdd: (Long, Double)) => insertSort2(init, toBeAdd)
     val combine = (op1: Array[(Long, Double)], op2: Array[(Long, Double)]) => {
-      for (v <- op2) insertSort2(op1, v);
+      for (v <- op2) insertSort2(op1, v)
       op1
     }
-
     val user = model.userFeatures.map { case (userIndex, rating) =>
       for (r <- 0 until rating.length - 1) yield MatrixEntry(userIndex, r, rating(r))
     }
@@ -243,6 +243,7 @@ class Guess extends Tool {
     val combine = (op1: Array[(String, Double)], op2: Array[(String, Double)]) => { for (v <- op2) insertSortCartesian(op1, v); op1 }
 
     val userItem= user.cartesian(item)
+    userItem.sparkContext.setCheckpointDir("/user/tmp/spark/checkpoint")
     userItem.checkpoint() // user-item 太大了，重新计算太过于麻烦，不知道这样能不能提高计算速度
     val userItemRating = userItem.map { case ((user, userRating), (item, itemRating)) =>
                                     (user, (item, calculate(userRating, itemRating))) }
