@@ -37,8 +37,8 @@ class BuyGoodsSimilarity extends Tool{
       s"where dt >= $start"
 
     val buyGoodsRDD = ReadData.readHive(sc, sql)
-                              .map{ case Array(category, cookie, date, behaviorId, goodsId) =>
-                                            (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}
+                              .map { case Array(category, cookie, date, behaviorId, goodsId) =>
+                                            (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId)) }
                               .filter(_._2._3 == "4000")
                               .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }
                               .distinct()

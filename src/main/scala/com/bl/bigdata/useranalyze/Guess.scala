@@ -86,7 +86,7 @@ class Guess extends Tool {
 
     val rank = ConfigurationBL.get("als.rank", "10").toInt
     val iterator = ConfigurationBL.get("als.iterator", "10").toInt
-    val model = ALS.train(trainRDD, rank, iterator, 0.01)
+    val model = ALS.train(trainRDD, rank, iterator)
     // 计算模型的均方差
     val usersProducts = trainRDD.map { case Rating(user, product, rating) => (user, product) }
     val predict = model.predict(usersProducts).map{ case Rating(user, product, rate) => ((user, product), rate)}
@@ -109,6 +109,7 @@ class Guess extends Tool {
     strategy match {
       case "matrix" => sparkMatrix(cookieIndex, productIndex, model)
       case "cartestian" => cartesian(cookieIndex, productIndex, model)
+      case "recommend" => recommend(cookieIndex, productIndex, model)
       case _ => throw new Exception("please input [matrix] or [cartestian]")
     }
 
@@ -116,53 +117,34 @@ class Guess extends Tool {
 
   /** 通过 spark 矩阵去计算 user-item 矩阵，数据量一大就会报错。*/
   def sparkMatrix(cookieIndex: RDD[(String, Long)], productIndex: RDD[(String, Long)], model: MatrixFactorizationModel): Unit = {
-    // ============= 以下为计算user-item矩阵，其实可以考虑用笛卡尔积计算而不是用spark的矩阵，以后再说吧。=============
     val takeNum = ConfigurationBL.get("als.take.num", "30").toInt
     val initValue = new Array[(Long, Double)](takeNum).map(s => (-1L, 0.0))
     val aggregate = (init: Array[(Long, Double)], toBeAdd: (Long, Double)) => insertSort2(init, toBeAdd)
-    val combine = (op1: Array[(Long, Double)], op2: Array[(Long, Double)]) => {
-      for (v <- op2) insertSort2(op1, v)
-      op1
-    }
-    val user = model.userFeatures.map { case (userIndex, rating) =>
-      for (r <- 0 until rating.length - 1) yield MatrixEntry(userIndex, r, rating(r))
-    }
-      .flatMap(s => s)
-    val userBlockMatrix = new CoordinateMatrix(user).toBlockMatrix()
-    //    userBlockMatrix.persist(StorageLevel.MEMORY_AND_DISK)  //这个矩阵不大，其实不需要缓存
-    val product = model.productFeatures.map { case (productIndex, rating) =>
-      for (p <- 0 until rating.length - 1) yield MatrixEntry(productIndex, p, rating(p))
-    }
-      .flatMap(s => s)
-    val productBlockMatrix = new CoordinateMatrix(product).transpose().toBlockMatrix()
-    //    productBlockMatrix.persist(StorageLevel.MEMORY_AND_DISK)  //这个矩阵不大，其实不需要缓存,缓存user-item矩阵就好了
+    val combine = (op1: Array[(Long, Double)], op2: Array[(Long, Double)]) => {{for (v <- op2) insertSort2(op1, v);op1}}
 
-    // 原先计算 user-item 矩阵的结果直接就进行下一步计算，这样spark就看不到 user-item 的引用，而这个矩阵是很大的，
-    // 但是spark没有它的引用，所以每一次需要它都会从头开始计算它，所以就很浪费时间了。现在的做法是把这个大大的矩阵
-    // 的引用保存起来，而不是不保存引用直接进行下一步计算。。。这spark，把一个复杂的计算 拆分成几次较小的执行，效率
-    // 会提高很多。
+    val user = model.userFeatures.map { case (userIndex, rating) => for (r <- 0 until rating.length - 1) yield MatrixEntry(userIndex, r, rating(r))}.flatMap(s => s)
+
+    val userBlockMatrix = new CoordinateMatrix(user).toBlockMatrix()
+//    userBlockMatrix.persist(StorageLevel.MEMORY_AND_DISK)
+    val product = model.productFeatures.map { case (productIndex, rating) => for (p <- 0 until rating.length - 1) yield MatrixEntry(productIndex, p, rating(p)) }.flatMap(s => s)
+    val productBlockMatrix = new CoordinateMatrix(product).transpose().toBlockMatrix()
     val cookieProductMatrix = userBlockMatrix.multiply(productBlockMatrix).toCoordinateMatrix().entries
     //    cookieProductMatrix.persist(StorageLevel.MEMORY_AND_DISK)
     val aggregateUserItemMatrix = cookieProductMatrix.map { case MatrixEntry(user, product, rating) => (user, (product, rating)) }
-      .aggregateByKey(initValue)(aggregate, combine)
+                                  .aggregateByKey(initValue)(aggregate, combine)
     aggregateUserItemMatrix.persist(StorageLevel.MEMORY_AND_DISK_SER) // 序列化以后缓存在磁盘和内存中
 
-    val productItemTuple = aggregateUserItemMatrix.map { case (user, products) =>
-      for ((productIndex, rating) <- products) yield (productIndex, (user, rating))
-    }
-      .flatMap(s => s)
+    val productItemTuple = aggregateUserItemMatrix.map { case (user, products) => for ((productIndex, rating) <- products) yield (productIndex, (user, rating)) }.flatMap(s => s)
+
     val replaceProduct = productIndex.map(s => (s._2, s._1))
-      .join(productItemTuple)
-      .map { case (productIndex, (product, (user, rating))) => (user, (product, rating)) }
+                                      .join(productItemTuple)
+                                      .map { case (productIndex, (product, (user, rating))) => (user, (product, rating)) }
 
     //    replaceProduct.checkpoint() //可以考虑把这个结果 checkpoint 起来
     val replaceItemIndex = cookieIndex.map(s => (s._2, s._1))
                                       .join(replaceProduct)
                                       .map { case (userIndex, (user, (product, rating))) => (user, Seq((product, rating))) }
                                       .reduceByKey(_ ++ _).map(s => (s._1, s._2.map(s0 => (s0._1, s0._2.toString)).toMap))
-
-    //    val userItemTupleString = replaceItemIndex.mapValues(p => p.mkString("#"))
-    //    userItemTupleString.checkpoint() //把它checkpoint 起来，及时导入redis失败，那么也可以重新导入？？？
 
     /**
     //------------------------------------------------------------
@@ -191,6 +173,60 @@ class Guess extends Tool {
     Message.addMessage(s"insert into redis :  ${count.value}")
   }
 
+
+  /** 采用笛卡尔积方式计算 user-item 矩阵 */
+  def cartesian(cookieIndex: RDD[(String, Long)], productIndex: RDD[(String, Long)], model: MatrixFactorizationModel): Unit = {
+    val indexUser = cookieIndex.map(s => (s._2.toInt, s._1))
+    val user = model.userFeatures.join(indexUser).map { case (index, (ratings, cookie)) => (cookie, ratings) }
+    val indexProd = productIndex.map(s => (s._2.toInt, s._1))
+    val item = model.productFeatures.join(indexProd).map { case  (index, (ratings, itemNo)) => (itemNo, ratings)}
+    val takeNum = ConfigurationBL.get("als.take.num", "30").toInt
+    val initValue = new Array[(String, Double)](takeNum).map(s =>("", -1.0))
+    val aggregate = (init: Array[(String, Double)], toBeAdd: (String, Double)) => insertSortCartesian(init, toBeAdd)
+    val combine = (op1: Array[(String, Double)], op2: Array[(String, Double)]) => { for (v <- op2) insertSortCartesian(op1, v); op1 }
+    val userItem= user.cartesian(item)
+    userItem.repartition(200)
+    userItem.persist(StorageLevel.MEMORY_AND_DISK_SER)
+//    userItem.sparkContext.setCheckpointDir("/user/tmp/spark/checkpoint")
+//    userItem.checkpoint() // user-item 太大了，重新计算太过于麻烦，不知道这样能不能提高计算速度
+    val userItemRating = userItem.map { case ((user, userRating), (item, itemRating)) =>
+                                    (user, (item, calculate(userRating, itemRating))) }
+
+    val pickUserItem = userItemRating.aggregateByKey(initValue)(aggregate, combine)
+    val result = pickUserItem.map(s => (s._1, s._2.map(s0 => (s0._1, s0._2.toString)).toMap))
+
+    val count = result.sparkContext.accumulator(0)
+    saveMapToRedis(result, count)
+    Message.addMessage(s"als model count:\t$count")
+
+  }
+
+
+
+  /** 将所有用户聚集到driver，然后一个一个推荐。*/
+  def recommend(cookieIndex: RDD[(String, Long)], productIndex: RDD[(String, Long)], model: MatrixFactorizationModel): Unit = {
+    val num = ConfigurationBL.get("als.take.num", "30").toInt
+    // 商品编号的 map
+    val product = productIndex.map(s => (s._2.toInt, s._1)).collectAsMap()
+    val indexUser = cookieIndex.map(s => (s._2.toInt, s._1))
+
+//    model.userFeatures.cache()
+//    model.productFeatures.cache()
+    // 将所有用户 collect 到 driver 节点
+    val users = model.userFeatures.map(_._1).collect()
+
+    val result = users.map { case user => (user, model.recommendProducts(user, num)) }
+      .map { case (user, products) => (user, products.map(p => (product(p.product), p.rating.toString))) }
+    val resultRDD = SparkFactory.getSparkContext.parallelize(result).join(indexUser).map { case (index, (p, cookie)) => (cookie, p.toMap)}
+    val count = SparkFactory.getSparkContext.accumulator(0)
+    saveMapToRedis(resultRDD, count)
+    Message.addMessage(s"als model count:\t$count")
+
+  }
+
+
+
+
   def getMemory(memory: String): Int = {
     if ( memory.endsWith("g") ) {
       memory.substring(0, memory.indexOf("g")).toInt
@@ -203,57 +239,6 @@ class Guess extends Tool {
     } else {
       throw new Exception("error memory munber!")
     }
-  }
-
-  def getAllModel(model: MatrixFactorizationModel): RDD[(Long, String)] = {
-
-    val initValue = new Array[(Long, Double)](20).map(s =>(-1L,0.0))
-    val aggregate = (init: Array[(Long, Double)], toBeAdd: (Long, Double)) => insertSort2(init, toBeAdd)
-    val combine = (op1: Array[(Long, Double)], op2: Array[(Long, Double)]) => {for (v <- op2) insertSort2(op1, v); op1}
-
-    val user = model.userFeatures.map{ case (userIndex, rating) =>
-      for (r <- 0 until rating.length - 1) yield MatrixEntry(userIndex, r, rating(r)) }.flatMap(s => s)
-    val userBlockMatrix = new CoordinateMatrix(user).toBlockMatrix()
-    userBlockMatrix.persist(StorageLevel.DISK_ONLY_2)
-
-    val product = model.productFeatures.map{ case (productIndex, rating) =>
-      for (p <- 0 until rating.length -1) yield MatrixEntry(productIndex, p, rating(p))}.flatMap(s=>s)
-    val productBlockMatrix = new CoordinateMatrix(product).transpose().toBlockMatrix()
-    productBlockMatrix.persist(StorageLevel.DISK_ONLY_2)
-
-
-    val userProduct = userBlockMatrix.multiply(productBlockMatrix)
-                                      .toCoordinateMatrix().entries
-                                      .map{ case MatrixEntry(user, product, rating) => (user,(product, rating))}
-                                      .aggregateByKey(initValue)(aggregate, combine)
-                                      .map(s => (s._1, s._2.mkString("#")))
-    userProduct
-  }
-
-  /** 采用笛卡尔积方式计算 user-item 矩阵*/
-  def cartesian(cookieIndex: RDD[(String, Long)], productIndex: RDD[(String, Long)], model: MatrixFactorizationModel): Unit = {
-    val indexUser = cookieIndex.map(s => (s._2.toInt, s._1))
-    val user = model.userFeatures.join(indexUser).map{ case (index, (ratings, cookie)) => (cookie, ratings)}
-    val indexProd = productIndex.map(s => (s._2.toInt, s._1))
-    val item = model.productFeatures.join(indexProd).map { case  (index, (ratings, itemNo)) => (itemNo, ratings)}
-
-    val takeNum = ConfigurationBL.get("als.take.num", "30").toInt
-    val initValue = new Array[(String, Double)](takeNum).map(s =>("", -1.0))
-    val aggregate = (init: Array[(String, Double)], toBeAdd: (String, Double)) => insertSortCartesian(init, toBeAdd)
-    val combine = (op1: Array[(String, Double)], op2: Array[(String, Double)]) => { for (v <- op2) insertSortCartesian(op1, v); op1 }
-
-    val userItem= user.cartesian(item)
-    userItem.sparkContext.setCheckpointDir("/user/tmp/spark/checkpoint")
-    userItem.checkpoint() // user-item 太大了，重新计算太过于麻烦，不知道这样能不能提高计算速度
-    val userItemRating = userItem.map { case ((user, userRating), (item, itemRating)) =>
-                                    (user, (item, calculate(userRating, itemRating))) }
-    val pickUserItem = userItemRating.aggregateByKey(initValue)(aggregate, combine)
-    val result = pickUserItem.map(s => (s._1, s._2.map(s0 => (s0._1, s0._2.toString)).toMap))
-
-    val count = result.sparkContext.accumulator(0)
-    saveMapToRedis(result, count)
-    Message.addMessage(s"als model count:\t$count")
-
   }
 
   def calculate(array1: Array[Double], array2: Array[Double]): Double ={
