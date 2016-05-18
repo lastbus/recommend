@@ -185,7 +185,7 @@ class Guess extends Tool {
     val aggregate = (init: Array[(String, Double)], toBeAdd: (String, Double)) => insertSortCartesian(init, toBeAdd)
     val combine = (op1: Array[(String, Double)], op2: Array[(String, Double)]) => { for (v <- op2) insertSortCartesian(op1, v); op1 }
     val userItem= user.cartesian(item)
-    userItem.repartition(200)
+    userItem.repartition(1000)
     userItem.persist(StorageLevel.MEMORY_AND_DISK_SER)
 //    userItem.sparkContext.setCheckpointDir("/user/tmp/spark/checkpoint")
 //    userItem.checkpoint() // user-item 太大了，重新计算太过于麻烦，不知道这样能不能提高计算速度
