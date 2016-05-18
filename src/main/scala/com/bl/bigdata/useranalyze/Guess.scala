@@ -62,6 +62,8 @@ class Guess extends Tool {
     val productIndex = ratingRDD.map(_._2._2).distinct().zipWithIndex().persist(StorageLevel.MEMORY_AND_DISK)
     val productNum = productIndex.count()
 
+    Message.addMessage(s"There are $cookieNum  users , and $productNum  products.")
+
     /** 有个问题，从 hive 读入的数据是大量的小文件，有好几千，需要把这些小文件合并成大文件，那么合并的依据是什么？
       * 初步做法是： executor.instances * executor.cores 。
       *
@@ -105,6 +107,7 @@ class Guess extends Tool {
     val memoryNeed = 24L * cookieNum * productNum / 1024 / 1024 / 1024
     if (memoryNeed.toDouble / totalMemory > 1)
       Message.addMessage(s"total memory : $totalMemory, but needs:  $memoryNeed ")
+
     val strategy = ConfigurationBL.get("als.strategy", "matrix")
     strategy match {
       case "matrix" => sparkMatrix(cookieIndex, productIndex, model)
@@ -232,8 +235,16 @@ class Guess extends Tool {
 
   /** 采用笛卡尔积方式计算 user-item 矩阵*/
   def cartesian(cookieIndex: RDD[(String, Long)], productIndex: RDD[(String, Long)], model: MatrixFactorizationModel): Unit = {
+//    val cookiePath = ConfigurationBL.get("als.cookie.path")
+//    val productPath = ConfigurationBL.get("als.product.path")
+//    val sc = SparkFactory.getSparkContext
+//    sc.textFile(cookiePath).map(s => { val  a = s.split("\t"); (a(1).toInt, a(0))})
+//    sc.textFile(productPath).map(s => { val  a = s.split("\t"); (a(1).toInt, a(0))})
+
+
     val indexUser = cookieIndex.map(s => (s._2.toInt, s._1))
     val user = model.userFeatures.join(indexUser).map{ case (index, (ratings, cookie)) => (cookie, ratings)}
+
     val indexProd = productIndex.map(s => (s._2.toInt, s._1))
     val item = model.productFeatures.join(indexProd).map { case  (index, (ratings, itemNo)) => (itemNo, ratings)}
 
@@ -243,14 +254,15 @@ class Guess extends Tool {
     val combine = (op1: Array[(String, Double)], op2: Array[(String, Double)]) => { for (v <- op2) insertSortCartesian(op1, v); op1 }
 
     val userItem= user.cartesian(item)
-    userItem.sparkContext.setCheckpointDir("/user/tmp/spark/checkpoint")
-    userItem.checkpoint() // user-item 太大了，重新计算太过于麻烦，不知道这样能不能提高计算速度
+    userItem.persist(StorageLevel.MEMORY_AND_DISK)
+//    userItem.sparkContext.setCheckpointDir("/user/tmp/spark/checkpoint")
+//    userItem.checkpoint() // user-item 太大了，重新计算太过于麻烦，不知道这样能不能提高计算速度
     val userItemRating = userItem.map { case ((user, userRating), (item, itemRating)) =>
                                     (user, (item, calculate(userRating, itemRating))) }
     val pickUserItem = userItemRating.aggregateByKey(initValue)(aggregate, combine)
     val result = pickUserItem.map(s => (s._1, s._2.map(s0 => (s0._1, s0._2.toString)).toMap))
 
-    val count = result.sparkContext.accumulator(0)
+    val count = SparkFactory.getSparkContext.accumulator(0)
     saveMapToRedis(result, count)
     Message.addMessage(s"als model count:\t$count")
 
@@ -336,7 +348,10 @@ class Guess extends Tool {
     rdd.foreachPartition(partition => {
       val jedis = RedisClient.pool.getResource
       partition.foreach(s => {
-        jedis.hmset(alsPrefix + s._1, s._2)
+        val key = alsPrefix + s._1
+        if (jedis.exists(key)) jedis.del(key)
+        jedis.hmset(key, s._2)
+
         accumulator += 1
       })
       jedis.close()
