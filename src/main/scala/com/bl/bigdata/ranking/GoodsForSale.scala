@@ -1,12 +1,12 @@
 package com.bl.bigdata.ranking
 
-import java.util
-
+import com.bl.bigdata.accumulator.MyAccumulator._
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{Accumulator, SparkContext}
+
 
 /**
   * 计算商品的属性，保存成redis中hash值。
@@ -64,13 +64,15 @@ class GoodsForSale extends Tool {
     * @param hiveContext 读取 hive 表
     */
   def toRedis2(hiveContext: HiveContext) = {
+
+
     val sql = "select sid, mdm_goods_sid, goods_sales_name, goods_type, pro_sid, brand_sid, " +
                       "cn_name, category_id, category_name, sale_price, pic_sid, url, channel_sid  " +
               "from recommendation.goods_avaialbe_for_sale_channel where channel_sid == '3' or channel_sid = '1' "
     val sc = hiveContext.sparkContext
     val accumulator = sc.accumulator(0)
     val accumulator1 = sc.accumulator(0)
-    val errorMessage = sc.accumulator("")
+    val errorMessage = sc.accumulator(new StringBuffer())
     val prefix = ConfigurationBL.get("goods.attr")
     val r = hiveContext.sql(sql).rdd
                         .map(row => if (row.isNullAt(7)) null else (row.getString(0), row.getString(1), row.getString(2),
@@ -88,15 +90,19 @@ class GoodsForSale extends Tool {
                                                           "cn_name" -> cn_name, "category_id" -> category_id,
                                                           "category_name" -> category_name, "sale_price" -> sale_price,
                                                           "pic_sid" -> pic_id, "url" -> url)
-                                            val m = new util.HashMap[String, String]
-                                            for ((k, v) <- map) m.put(k, v)
+                                            val m = new java.util.HashMap[String, String]
+                                            for ((k, v) <- map) if (v != null) m.put(k, v) else m.put(k, "null")
                                             val terminal = if ( channel == "3") "pc_" else "app_"
                                             (prefix + terminal + sid, m)}
 //    sc.hashKVRDD2Redis(r)
-    saveToRedisHash(r, accumulator, accumulator1)
+//    saveToRedisHash(r, accumulator, accumulator1)
     saveToRedisHash2(r, accumulator, accumulator1, errorMessage)
+//    val result = RedisWriter.saveHashValue(r)
+    if (errorMessage.value.length() > 1) Message.addMessage(errorMessage.value.toString)
     Message.addMessage(s"\t$prefix*: $accumulator\n")
     Message.addMessage(s"\t插入 redis $prefix pc/app*: $accumulator1\n")
+//    logger.info(result)
+//    Message.addMessage(result)
   }
 
   /**
@@ -107,27 +113,25 @@ class GoodsForSale extends Tool {
    */
   def saveToRedisHash2(rdd: RDD[(String, java.util.HashMap[String, String])],
                       accumulator: Accumulator[Int], accumulator2: Accumulator[Int],
-                        messageAccumulator: Accumulator[String]) ={
+                        messageAccumulator: Accumulator[StringBuffer]) ={
     rdd.foreachPartition(partition => {
-      try {
-        val jedis = RedisClient.pool.getResource
-        var i = 0
-        partition.foreach(data => {
-          accumulator += 1
-          try {
-            jedis.hmset(data._1, data._2)
-          } catch {
-            case e: Exception =>
-              i += 1
-              messageAccumulator.add(s"insert into redis error : ${data._1}\n ${e.getMessage}\n")
-              if (i > 100) throw new Exception(e) // 累计导入redis失败100条则报错。
-          }
-          accumulator2 += 1
-        })
-        jedis.close()
-      } catch {
-        case e: Exception => logger.fatal(e.getMessage)
-      }
+      val jedis = RedisClient.pool.getResource
+      var i = 0
+      val sb = new StringBuffer()
+      partition.foreach(data => {
+        accumulator += 1
+        try {
+          jedis.hmset(data._1, data._2)
+        } catch {
+          case e: Exception =>
+            i += 1
+            sb.append(s"insert into redis error : ${data._1}\n ${e.getMessage}\n")
+            if (i > 10) throw new Exception(e) // 累计导入redis失败100条则报错。
+        }
+        accumulator2 += 1
+        messageAccumulator += sb
+      })
+      jedis.close()
 
     })
   }
