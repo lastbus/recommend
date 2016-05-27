@@ -13,7 +13,7 @@ object Test {
 
   def main(args: Array[String]): Unit = {
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
-    val ssc = StreamingContext.getOrCreate(path, createStreamingContext _)
+    val ssc = StreamingContext.getOrCreate(path, createStreamingContext)
     ssc.start()
     ssc.awaitTermination()
   }

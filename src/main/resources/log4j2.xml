@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<Configuration status="info">
+<Configuration status="debug">
     <Appenders>
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%d{yyyy/MM/dd HH:mm:ss.SSS} %-5level %logger{36}: %msg%n" />
         </Console>
-        <RollingFile name="RollingFile" fileName="logs/log"
-                     filePattern="logs/history/%d{yyyyMM}.log.gz">
+        <RollingFile name="RollingFile" fileName="/var/lib/recommendation/logs/log"
+                     filePattern="/var/lib/recommendation/logs/history/%d{yyyyMM}.log.gz">
             <PatternLayout>
                 <Pattern>%d{yyyy/MM/dd HH:mm:ss}\t%5p\t%C:%L\t%m%n</Pattern>
             </PatternLayout>
@@ -18,7 +18,7 @@
         <!--<Root level="trace">-->
             <!--<AppenderRef ref="Console" />-->
         <!--</Root>-->
-        <Root level="info">
+        <Root level="debug">
             <AppenderRef ref="RollingFile" />
         </Root>
     </Loggers>
