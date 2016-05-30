@@ -22,7 +22,7 @@ object Test {
 
     val htablePool = new HTablePool(conf, 10)
     val tt = htablePool.getTable("")
-    
+
 
 
   }
