@@ -25,7 +25,7 @@ object ConfigurationBL extends ConfigurableBL {
   }
 
   def addResource(path: String) = {
-    logger.info(s"begin to parse configuration file: $path.")
+    logger.debug(s"begin to parse configuration file: $path.")
     val xml = XML.load(path)
     val properties = xml \ "property"
     val size = properties.length

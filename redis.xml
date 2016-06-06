@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- redis -->
+    <property>
+        <name>redis.host</name>
+        <value>10.201.128.216</value>
+    </property>
+    <property>
+        <name>redis.port</name>
+        <value>6379</value>
+    </property>
+    <property>
+        <name>redis.timeout</name>
+        <value>10000</value>
+    </property>
+
+</configuration>

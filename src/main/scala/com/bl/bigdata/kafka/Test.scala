@@ -28,18 +28,7 @@ object Test {
       if (i > 1000) kafkaProducer.flush()
       Thread.sleep(1000L)
     }
-//    kafkaProducer.close()
-    sys.addShutdownHook({
-      println("exit!")
-      kafkaProducer.close()
-    })
 
-    Runtime.getRuntime.addShutdownHook(new Thread(){
-      override def run(): Unit = {
-        println("exit, runtime")
-        kafkaProducer.close()
-      }
-    })
 
   }
 }

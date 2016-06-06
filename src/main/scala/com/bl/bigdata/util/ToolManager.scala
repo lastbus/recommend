@@ -50,8 +50,8 @@ class ToolManager extends Tool {
         "UserCookie".toLowerCase -> new UserCookie with ToolRunner,
         "UserGoodsWeight".toLowerCase -> new UserGoodsWeight with ToolRunner,
         "GoodsNewArrival".toLowerCase -> new GoodsNewArrival with ToolRunner,
-          "als" -> new Guess with ToolRunner,
-          "search" -> new Search with ToolRunner)
+        "als" -> new Guess with ToolRunner,
+        "search" -> new Search with ToolRunner)
       for (arg <- args; key = arg.toLowerCase if map.contains(key)) list += map(key)
     }
   }

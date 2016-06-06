@@ -25,7 +25,8 @@ class UserGoodsWeight extends Tool {
     val today = sdf.format(new Date())
     val sql = "select u.cookie_id, u.category_sid, g.brand_sid, u.behavior_type  " +
               " from recommendation.user_behavior_raw_data u  " +
-              " left join recommendation.goods_avaialbe_for_sale_channel g on u.goods_sid = g.sid "
+              " left join recommendation.goods_avaialbe_for_sale_channel g on u.goods_sid = g.sid " +
+              " where u.behavior_type = 1000 or u.behavior_type = 2000 or u.behavior_type = 3000 or u.behavior_type = 4000 "
 
     val rawRDD = ReadData.readHive(sc, sql)
     val trainRDD = rawRDD.map{ case Array(cookie, category, brand, behavior) =>
@@ -72,19 +73,21 @@ class UserGoodsWeight extends Tool {
     if (hbase) {
         val hbaseConf = HBaseConfiguration.create()
         val table = ConfigurationBL.get("user.goods.weight.table")
+        val columnFamily = ConfigurationBL.get("user.goods.weight.table.column.family")
         hbaseConf.set(TableOutputFormat.OUTPUT_TABLE, table)
         val job = Job.getInstance(hbaseConf)
         job.setOutputKeyClass(classOf[ImmutableBytesWritable])
         job.setOutputValueClass(classOf[Put])
         job.setOutputFormatClass(classOf[TableOutputFormat[Put]])
-        val columnFamily = Bytes.toBytes("value")
+        val columnFamilyBytes = Bytes.toBytes("value")
         // 准备输出到 HBase
         val r2 = r.map { case (cookie, cateBrand) =>
+
                             val put = new Put(Bytes.toBytes(cookie))
                             cateBrand.map {
                               case (category, categoryWeight, brands) =>
                               val bString = category + ":" + brands.map(s => "("+s._1 + "," + s._2 + ")").mkString("#")
-                              put.addColumn(columnFamily, Bytes.toBytes(category), Bytes.toBytes(bString))}
+                              put.addColumn(columnFamilyBytes, Bytes.toBytes(category), Bytes.toBytes(bString))}
                             (new ImmutableBytesWritable(Bytes.toBytes("")), put) }
         r2.saveAsNewAPIHadoopDataset(job.getConfiguration)
     }

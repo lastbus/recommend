@@ -1,6 +1,7 @@
 package com.bl.bigdata.redis
 
 import redis.clients.jedis.Jedis
+import scala.collection.JavaConversions._
 
 /**
   * Created by MK33 on 2016/4/5.
@@ -11,12 +12,20 @@ object Test {
 
 
     val jedis = new Jedis("10.201.128.216")
-    val all = jedis.keys("rcmd_orig_pc_*").toArray
-    println(all.length)
-//    val t = jedis.multi()
-    all.foreach{ s =>
-      jedis.del(s.toString)
-    }
+    jedis.set("a", "a")
+    jedis.hmset("rcmd_rt_view_" + "0", Map("a" -> "b"))
+    jedis.close()
+
+
+
+
+
+//    val all = jedis.keys("rcmd_orig_pc_*").toArray
+//    println(all.length)
+////    val t = jedis.multi()
+//    all.foreach{ s =>
+//      jedis.del(s.toString)
+//    }
 //    t.exec()
 
 

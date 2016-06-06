@@ -19,6 +19,7 @@ object ProducerDemo {
     }
     val Array(propertiesPath, topic) = args
     val props = new Properties()
+
     props.load(new BufferedInputStream(new FileInputStream(propertiesPath)))
 
     val producer = new KafkaProducer[String, String](props)

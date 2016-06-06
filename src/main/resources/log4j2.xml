@@ -15,11 +15,11 @@
         </RollingFile>
     </Appenders>
     <Loggers>
-        <!--<Root level="trace">-->
-            <!--<AppenderRef ref="Console" />-->
-        <!--</Root>-->
         <Root level="debug">
-            <AppenderRef ref="RollingFile" />
+            <AppenderRef ref="Console" />
         </Root>
+        <!--<Root level="debug">-->
+            <!--<AppenderRef ref="RollingFile" />-->
+        <!--</Root>-->
     </Loggers>
 </Configuration>

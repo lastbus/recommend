@@ -13,7 +13,7 @@ object AutomaticConsumer {
   def main(args: Array[String]) {
     val props = new Properties()
     props.put("bootstrap.servers", "10.201.129.74:9092,10.201.129.75:9092,10.201.129.81:9092")
-    props.put("group.id", "test")
+    props.put("group.id", "local")
     props.put("enable.auto.commit", "true")
     props.put("auto.commit.interval.ms", "1000")
     props.put("session.timeout.ms", "30000")
@@ -21,16 +21,17 @@ object AutomaticConsumer {
     props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer") // 如何将 byte 转换为 object
 
     val consumer = new KafkaConsumer[String, String](props)
-    consumer.subscribe(util.Arrays.asList("my-replicated-topic"))
+    consumer.subscribe(util.Arrays.asList("recommend_trace"))
 
     while (true)
     {
+      println("=============")
       val records = consumer.poll(100)
       val iterator = records.iterator()
       while (iterator.hasNext)
       {
         val next = iterator.next()
-        println(s"offset = ${next.offset()}, key = ${next.key()}, value = ${next.value()} .")
+        println(s"offset = ${next.offset()}, key = ${next.key()}, value = ${next.value()} ")
       }
     }
 

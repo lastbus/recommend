@@ -10,8 +10,6 @@ object HBaseConnectionPool {
 
   lazy val connection = {
     val conf = HBaseConfiguration.create()
-    conf.set("hbase.zookeeper.quorum", "m79sit,s80sit,s81sit")
-    conf.set("hbase.zookeeper.property.clientPort", "2181")
     ConnectionFactory.createConnection(conf)
   }
 

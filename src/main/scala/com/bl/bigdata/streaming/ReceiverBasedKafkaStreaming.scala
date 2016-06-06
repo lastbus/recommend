@@ -29,11 +29,11 @@ object ReceiverBasedKafkaStreaming extends StreamingLogger {
     val Array(zooKeeper, consumerGroup, topic, thread) = args
 
     val topics = topic.split(",").map((_, thread.toInt)).toMap
-    val dstream = KafkaUtils.
+    val dStream = KafkaUtils.
       createStream(ssc, zooKeeper, consumerGroup, topics)
       .map(_._2)
 
-    dstream.foreachRDD
+    dStream.foreachRDD
     { rdd =>
       rdd.foreachPartition
       { partition =>
@@ -62,6 +62,7 @@ object ReceiverBasedKafkaStreaming extends StreamingLogger {
             case e: Exception => logger.debug("not a json string: " + item)
           }
         }
+        table.close()
         jedis.close()
       }
 

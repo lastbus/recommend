@@ -9,4 +9,5 @@ trait StreamingLogger {
 
 
   val logger = LogManager.getLogger("spark.streaming")
+
 }

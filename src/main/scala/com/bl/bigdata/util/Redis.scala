@@ -5,6 +5,7 @@ package com.bl.bigdata.util
  */
 trait Redis {
   ConfigurationBL.addResource("redis.xml")
+  println("=============== redis ================")
   var host: String = ConfigurationBL.get("redis.host")
   val port: Int = ConfigurationBL.get("redis.port").toInt
   val timeout: Int = ConfigurationBL.get("redis.timeout").toInt
