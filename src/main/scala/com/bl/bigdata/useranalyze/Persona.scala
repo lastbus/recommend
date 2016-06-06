@@ -84,6 +84,7 @@ class Persona extends Tool {
       (new ImmutableBytesWritable(Bytes.toBytes("")), put)
     }
     result.saveAsNewAPIHadoopDataset(job.getConfiguration)
+
     logger.info("persona 计算结束.")
   }
 
@@ -98,8 +99,8 @@ class Persona extends Tool {
     val kvs = kv.reduceByKey(_ ++ _).map { s =>
       val size = s._2.length
       val sorted = s._2.sortWith(_._2 < _._2)
-      val high = sorted(size / 8)._2
-      val mid = sorted(size / 4)._2
+      val high = sorted(size * 8 / 10)._2
+      val mid = sorted(size * 4 / 10)._2
       (s._1, (sorted(0)._2, mid, high, sorted(size - 1)._2))
     }
     kvs

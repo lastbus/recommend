@@ -69,19 +69,20 @@ class UserGoodsWeight extends Tool {
 
     val hbaseConf = HBaseConfiguration.create()
     val table = ConfigurationBL.get("user.goods.weight.table")
+    val columnFamily = ConfigurationBL.get("user.goods.weight.table.column.family")
     hbaseConf.set(TableOutputFormat.OUTPUT_TABLE, table)
     val job = Job.getInstance(hbaseConf)
     job.setOutputKeyClass(classOf[ImmutableBytesWritable])
     job.setOutputValueClass(classOf[Put])
     job.setOutputFormatClass(classOf[TableOutputFormat[Put]])
-    val columnFamily = Bytes.toBytes("value")
+    val columnFamilyBytes = Bytes.toBytes(columnFamily)
     // 准备输出到 HBase
     val r2 = r.map { case (cookie, cateBrand) =>
       val put = new Put(Bytes.toBytes(cookie))
       cateBrand.map {
         case (category, categoryWeight, brands) =>
           val bString = category + ":" + brands.map(s => "(" + s._1 + "," + s._2 + ")").mkString("#")
-          put.addColumn(columnFamily, Bytes.toBytes(category), Bytes.toBytes(bString))
+          put.addColumn(columnFamilyBytes, Bytes.toBytes(category), Bytes.toBytes(bString))
       }
       (new ImmutableBytesWritable(Bytes.toBytes("")), put)
     }
