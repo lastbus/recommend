@@ -4,7 +4,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.bl.bigdata.datasource.ReadData
-import com.bl.bigdata.util.{ToolRunner, ConfigurationBL, SparkFactory, Tool}
+import com.bl.bigdata.util.{ConfigurationBL, SparkFactory, Tool, ToolRunner}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.hbase.HBaseConfiguration
+import org.apache.hadoop.hbase.client.Put
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.mapreduce.Job
 import org.apache.mahout.cf.taste.hadoop.item.RecommenderJob
 
 /**
@@ -16,19 +24,17 @@ class HiveDataRaking extends Tool
 
   override def run(args: Array[String]): Unit =
   {
-    if (args.length < 2) {
-      println("Please input <spark temp output> <output> <date count> ")
+    if (args.length < 2)
+    {
+      println("Usage: HiveDataRaking <spark temp output> <output> <date count> ")
       sys.exit(-1)
     }
-    import scala.sys.process._
-    "00".!!
-
 
     val Array(tempOutput, output, dateCount) = args
     val start = getStartTime(dateCount)
-    val sql = s"select cookie_id, behavior_type, goods_sid, dt " +
+    val sql = s"select member_id, behavior_type, goods_sid, dt " +
       s"from recommendation.user_behavior_raw_data " +
-      s"where dt >= $start "
+      s"where dt >= $start and isnotnull(member_id)"
     val sc = SparkFactory.getSparkContext("user-item-rating")
     val rawRDD = ReadData.readHive(sc, sql)
     // 过滤得到浏览、购买、加入购物车等等操作
@@ -38,25 +44,65 @@ class HiveDataRaking extends Tool
                           .filter (s => s._2 == "1000" || s._2 == "2000" ||s._2 == "3000" || s._2 == "4000" )
                           .map { item => (item._1, item._3, getRating(item._2, item._4, nowMills)) }
     val users = ratingRDD.map(_._1).zipWithIndex
-    users.map(s => s._1 + "," + s._2).saveAsTextFile("/user/spark/users")
-//    val items = ratingRDD.map(_._2).zipWithIndex()
-//    items.map(s => s._1 + "," + s._2).saveAsTextFile("/user/spark/items")
-    val training = ratingRDD.map(s => (s._1, (s._2, s._3))).join(users).map { case (user, ((prod, rating), userIndex)) => (userIndex, prod, rating)}
-//    .join(items).map { case (prod, ((userIndex, rating), prodIndex)) => (userIndex, prodIndex, rating)}
-    training.map(s => s"${s._1},${s._2},${s._3}").saveAsTextFile(tempOutput)
+    val tmp = "/tmp/userIndex"
+    val fs = FileSystem.get(new Configuration)
+    if (fs.exists(new Path(tmp))) fs.delete(new Path(tmp), true)
+    users.map(s => s._1 + "," + s._2).saveAsTextFile(tmp)
 
+    val training = ratingRDD.map(s => (s._1, (s._2, s._3))).join(users)
+                            .map { case (user, ((prod, rating), userIndex)) => (userIndex, prod, rating)}
+    if (fs.exists(new Path(tempOutput))) fs.delete(new Path(tempOutput), true)
+    training.map(s => s"${s._1},${s._2},${s._3}").saveAsTextFile(tempOutput)
+//    sc.stop()
+
+    val tempPath = "/tmp/mahout"
+    if (fs.exists(new Path(tempPath))) fs.delete(new Path(tempPath), true)
+    if (fs.exists(new Path(output))) fs.delete(new Path(output), true)
     val job = new RecommenderJob()
     val sb = new StringBuilder()
     sb.append(" -s SIMILARITY_LOGLIKELIHOOD ")
     sb.append(s" --input $tempOutput ")
     sb.append(s" --output $output ")
+    sb.append(s"--tempDir $tempPath ")
     val args2 = sb.toString().split(" ").filter(_.length > 1)
     job.run(args2)
 
-    val users1 = sc.textFile("/user/spark/users").map(s => {val a = s.split(","); (a(1), a(0))})
+    val sc2 = SparkFactory.getSparkContext("user-item-rating")
+    val users1 = sc2.textFile(tmp).map (s => {val a = s.split(","); (a(1), a(0))})
 //    val items2 = sc.textFile("/user/spark/items").map(s => {val a = s.split(","); (a(0), a(1))})
-    val hadoopResult = sc.textFile(output).map { s => val ab = s.split("\t"); (ab(0), ab(1)) }
-    hadoopResult.join(users1).map { case (userIndex, (prefer, userId)) => userId + "\t" + prefer }.saveAsTextFile("result")
+    val hadoopResult = sc2.textFile(output).map { s => val ab = s.split("\t"); (ab(0), ab(1)) }
+    val itemBasedResult = hadoopResult.join(users1).map { case (userIndex, (prefer, userId)) => (userId, prefer) }.distinct
+
+    val table = ConfigurationBL.get("mahout.table")
+    val columnFamily = ConfigurationBL.get("mahout.table.column.family")
+    val columnFamilyBytes = Bytes.toBytes(columnFamily)
+    val columnBytes = Bytes.toBytes("item-based")
+    val hBaseConf = HBaseConfiguration.create()
+    hBaseConf.set(TableOutputFormat.OUTPUT_TABLE, table)
+    val mrJob = Job.getInstance(hBaseConf)
+    mrJob.setOutputFormatClass(classOf[TableOutputFormat[Put]])
+    mrJob.setOutputKeyClass(classOf[ImmutableBytesWritable])
+    mrJob.setOutputValueClass(classOf[Put])
+
+    itemBasedResult.map { item =>
+      val itemList = item._2.substring(1, item._2.length - 2)
+      val put = new Put(Bytes.toBytes(item._1))
+      put.addColumn(columnFamilyBytes, columnBytes, Bytes.toBytes(itemList))
+      (new ImmutableBytesWritable(Bytes.toBytes("")), put)
+    }.saveAsNewAPIHadoopDataset(mrJob.getConfiguration)
+
+
+    sc2.stop()
+
+
+
+
+
+
+
+
+
+
   }
 
   def getStartTime(d: String) =

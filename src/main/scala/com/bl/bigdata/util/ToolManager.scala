@@ -1,5 +1,6 @@
 package com.bl.bigdata.util
 
+import com.bl.bigdata.mahout.HiveDataRaking
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.product.GoodsNewArrival
 import com.bl.bigdata.ranking.{GoodsForSale, HotSaleGoods}
@@ -38,7 +39,7 @@ class ToolManager extends Tool {
 //      list += new GoodsSimilarityInCate with ToolRunner // 同一类别商品的相似度
 //      list += new UserGoodsWeight with ToolRunner //
     } else {
-      val map: Map[String, Tool] = Map("BrowserGoodsSimilarity".toLowerCase -> new BrowserGoodsSimilarity with ToolRunner,
+      val map: Map[String, Tool] = Map ("BrowserGoodsSimilarity".toLowerCase -> new BrowserGoodsSimilarity with ToolRunner,
         "SeeBuyGoodsSimilarity".toLowerCase -> new SeeBuyGoodsSimilarity with ToolRunner,
         "BuyGoodsSimilarity".toLowerCase -> new BuyGoodsSimilarity with ToolRunner,
         "CategorySimilarity".toLowerCase -> new CategorySimilarity with ToolRunner,
@@ -51,7 +52,8 @@ class ToolManager extends Tool {
         "UserGoodsWeight".toLowerCase -> new UserGoodsWeight with ToolRunner,
         "GoodsNewArrival".toLowerCase -> new GoodsNewArrival with ToolRunner,
         "als" -> new Guess with ToolRunner,
-        "search" -> new Search with ToolRunner)
+        "search" -> new Search with ToolRunner,
+        "mahout" -> new HiveDataRaking with ToolRunner )
       for (arg <- args; key = arg.toLowerCase if map.contains(key)) list += map(key)
     }
   }
