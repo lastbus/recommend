@@ -21,27 +21,25 @@ class Persona extends Tool {
     logger.info("persona 开始计算.....")
     val sql = " select category_id, sid, sale_price from recommendation.goods_avaialbe_for_sale_channel "
 
-    val sqlBrowser = ConfigurationBL.get("persona.sql")
+    val sqlGoods = ConfigurationBL.get("persona.sql.goods")
+    val sqlBrowser = ConfigurationBL.get("persona.sql.browser")
     val table = ConfigurationBL.get("user.goods.weight.table")
     val sc = SparkFactory.getSparkContext("persona")
     val hiveContext = SparkFactory.getHiveContext
 
-    val rawRDD = hiveContext.sql(sql).rdd.map( row => (row.getLong(0).toString, row.getString(1), row.getDouble(2))).distinct()
+    val rawRDD = hiveContext.sql(sqlGoods).rdd.map( row => (row.getLong(0).toString, row.getString(1), row.getDouble(2))).distinct()
     // 计算商品所属类别的价格划分范围
     val out = calculate(rawRDD)
     out.cache()
-//    val out2 = out.map { case (goodsID, level, prices, category) => (goodsID, (level, prices)) }
-    // category_id, cookie_id, goods_id, sale_price
+
     val browser = hiveContext.sql(sqlBrowser).rdd.map( row => (row.getString(0), (row.getString(1), row.getString(2), row.getDouble(3)))).distinct
-//    val categoryLevel = out.map(s => (s._4, s._3)).collectAsMap()
-//    val categoryBroadcast = sc.broadcast(categoryLevel)
 
     val a = browser.join(out).map { case (category, ((cookie, goodsID, price), levels)) =>
                                       val level = if (price > levels._3) "H" else if (price > levels._2) "M" else "L"
                                       ((category, cookie), Seq(level))
                                     }
     // 用户对某个类别的价格偏好
-    val b = a.reduceByKey(_ ++ _).map { s =>
+  val b = a.reduceByKey(_ ++ _).map { s =>
       val low = s._2.count(_ == "L")
       val mid = s._2.count(_ == "M")
       val high = s._2.count(_ == "H")
