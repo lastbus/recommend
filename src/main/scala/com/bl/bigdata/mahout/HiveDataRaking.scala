@@ -1,10 +1,12 @@
 package com.bl.bigdata.mahout
 
+import java.io.{BufferedReader, InputStreamReader}
 import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.bl.bigdata.datasource.ReadData
-import com.bl.bigdata.util.{ConfigurationBL, SparkFactory, Tool, ToolRunner}
+import com.bl.bigdata.mail.Message
+import com.bl.bigdata.util._
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hbase.HBaseConfiguration
@@ -13,7 +15,6 @@ import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
-import org.apache.mahout.cf.taste.hadoop.item.RecommenderJob
 
 /**
  *
@@ -24,13 +25,12 @@ class HiveDataRaking extends Tool
 
   override def run(args: Array[String]): Unit =
   {
-    if (args.length < 2)
-    {
-      println("Usage: HiveDataRaking <spark temp output> <output> <date count> ")
-      sys.exit(-1)
-    }
-
-    val Array(tempOutput, output, dateCount) = args
+    logger.info(" ====== mahout recommendation =====")
+    val tempOutput = ConfigurationBL.get("mahout.tmp.spark.output")
+    val output = ConfigurationBL.get("mahout.tmp.hadoop.output")
+    val dateCount = ConfigurationBL.get("mahout.day.count")
+    val cmdPath = ConfigurationBL.get("mahout.shell.path")
+//    val Array(tempOutput, output, dateCount) = args
     val start = getStartTime(dateCount)
     val sql = s"select member_id, behavior_type, goods_sid, dt " +
       s"from recommendation.user_behavior_raw_data " +
@@ -55,18 +55,30 @@ class HiveDataRaking extends Tool
     training.map(s => s"${s._1},${s._2},${s._3}").saveAsTextFile(tempOutput)
 //    sc.stop()
 
+    //  mahout 临时工作目录
     val tempPath = "/tmp/mahout"
     if (fs.exists(new Path(tempPath))) fs.delete(new Path(tempPath), true)
     if (fs.exists(new Path(output))) fs.delete(new Path(output), true)
+    val runtime = Runtime getRuntime
+    val  mahout = runtime exec cmdPath
+    val errorInputStream = new BufferedReader(new InputStreamReader(mahout.getErrorStream))
+    val msg = errorInputStream readLine()
+    while (msg != null)
+    {
+      Message addMessage msg
+    }
+
+    /**
     val job = new RecommenderJob()
     val sb = new StringBuilder()
     sb.append(" -s SIMILARITY_LOGLIKELIHOOD ")
+    sb.append(" --numRecommendations 50  ")
     sb.append(s" --input $tempOutput ")
     sb.append(s" --output $output ")
     sb.append(s"--tempDir $tempPath ")
     val args2 = sb.toString().split(" ").filter(_.length > 1)
     job.run(args2)
-
+    */
     val sc2 = SparkFactory.getSparkContext("user-item-rating")
     val users1 = sc2.textFile(tmp).map (s => {val a = s.split(","); (a(1), a(0))})
 //    val items2 = sc.textFile("/user/spark/items").map(s => {val a = s.split(","); (a(0), a(1))})
@@ -91,17 +103,7 @@ class HiveDataRaking extends Tool
       (new ImmutableBytesWritable(Bytes.toBytes("")), put)
     }.saveAsNewAPIHadoopDataset(mrJob.getConfiguration)
 
-
-    sc2.stop()
-
-
-
-
-
-
-
-
-
+//    sc2.stop()
 
   }
 
@@ -131,8 +133,8 @@ object HiveDataRaking
   def main(args: Array[String])
   {
     ConfigurationBL.init()
-    val tool = new HiveDataRaking with ToolRunner
+    val tool = new HiveDataRaking with Timer
     tool.run(args)
-
+    SparkFactory.destroyResource()
   }
 }
