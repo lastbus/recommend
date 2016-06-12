@@ -101,6 +101,7 @@ class UserGoodsWeight extends Tool
     val columnFamilyBytes = Bytes.toBytes(columnFamily)
     val column = Bytes.toBytes("cbp")
 
+
     val userAccumulator = sc.accumulator(0)
     r0.map { case (cookie, categoryInfo) =>
         val put = new Put(Bytes.toBytes(cookie))
@@ -212,6 +213,5 @@ class UserGoodsWeight extends Tool
     }
     kvs
   }
-
 
 }
