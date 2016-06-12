@@ -1,4 +1,4 @@
-package com.bl.bigdata.ranking
+package com.bl.bigdata.product
 
 import java.text.SimpleDateFormat
 import java.util.Date

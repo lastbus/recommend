@@ -17,7 +17,7 @@ class RedisErrorMessage(val host: String,
     this.errorMsg = msg
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     s"""Redis error message:
       |   host: $host
       |   key: $key

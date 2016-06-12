@@ -1,8 +1,5 @@
 package com.bl.bigdata.useranalyze
 
-import java.text.SimpleDateFormat
-import java.util.Date
-
 import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.util.{ConfigurationBL, SparkFactory, Tool}
 import org.apache.hadoop.hbase.HBaseConfiguration
@@ -21,8 +18,6 @@ class UserGoodsWeight extends Tool {
     val sc = SparkFactory.getSparkContext("user goods weight")
     val output = ConfigurationBL.get("recmd.output", "")
     val hbase = output.contains("hbase")
-    val sdf = new SimpleDateFormat("yyyyMMdd")
-    val today = sdf.format(new Date())
     val sql = "select u.cookie_id, u.category_sid, g.brand_sid, u.behavior_type  " +
               " from recommendation.user_behavior_raw_data u  " +
               " left join recommendation.goods_avaialbe_for_sale_channel g on u.goods_sid = g.sid " +
@@ -73,7 +68,6 @@ class UserGoodsWeight extends Tool {
     if (hbase) {
         val hbaseConf = HBaseConfiguration.create()
         val table = ConfigurationBL.get("user.goods.weight.table")
-        val columnFamily = ConfigurationBL.get("user.goods.weight.table.column.family")
         hbaseConf.set(TableOutputFormat.OUTPUT_TABLE, table)
         val job = Job.getInstance(hbaseConf)
         job.setOutputKeyClass(classOf[ImmutableBytesWritable])

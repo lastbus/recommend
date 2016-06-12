@@ -18,7 +18,6 @@ import scala.collection.mutable._
  * 2 每个 category 最多选择 N 个，每个品牌推荐的产品数量和该品牌上线的新品数量成正比。
  * 3 最新上线的商品排名越靠前。
  *
- * 同一款商品不同款式（大小、颜色等等不一样）怎么区分？ 品牌和商品编号一样，销售渠道也一样，但是上线时间可能不一样。
  * Created by MK33 on 2016/4/21.
  */
 class GoodsNewArrival extends Tool {
@@ -58,7 +57,7 @@ class GoodsNewArrival extends Tool {
   def calculate(rdd: RDD[(String, String, String, String, Long)]): RDD[(String, String)] ={
     val sc = rdd.sparkContext
     // 每个品牌上线的商品数, 这个也应该不多，查一下有 160 个品牌
-    val bandCount = rdd.map(s => ((s._1, s._4))).countByValue().map(s => (s._1._1, s._2.toInt)).toMap
+    val bandCount = rdd.map(s => (s._1, s._4)).countByValue().map(s => (s._1._1, s._2.toInt)).toMap
     val bandMapBroadCast = sc.broadcast(bandCount)
     // 统计每个类别上线的商品数, 类别数不多( 267），转换成 map
     val categoryCount = rdd.map(_._4).countByValue().toMap
@@ -66,7 +65,7 @@ class GoodsNewArrival extends Tool {
 
     // 根据每个band上线的商品数在所属category的占比，取一定数量的商品，至少取一个。
     val pickGoods = rdd.map{ case (bandID, sid, productID, categoryID, delt) =>
-                                ((bandID, categoryID), Seq((sid, productID, delt))) }
+                                ((bandID, categoryID), mutable.Seq((sid, productID, delt))) }
                         .reduceByKey(_ ++ _)
                         .map { case (band, prodSeq) =>
                                   val bandMap = bandMapBroadCast.value
@@ -74,14 +73,14 @@ class GoodsNewArrival extends Tool {
                                   // 每个品牌取的个数正比与 品牌上线的商品数 / 品牌所属的category上线的商品总数
                                   val num = Math.ceil(bandMap(band._1).toDouble / categoryMap(band._2).toDouble).toInt
                                   (band, distinct(prodSeq).sortWith(_._3 < _._3).distinct.take(num))}
-                        .map{case ((band, category), prodSeq) => for (p <- prodSeq) yield (category, Seq((band, p)))}
+                        .map{case ((band, category), prodSeq) => for (p <- prodSeq) yield (category, mutable.Seq((band, p)))}
                         .flatMap(s=>s).reduceByKey(_ ++ _)
 
     val result = pickGoods.map { case (bandID, prodSeq) => (bandID, prodSeq.sortWith(_._2._3 < _._2._3).map(_._2._1).mkString("#")) }
     result
   }
 
-  def distinct(prod: Seq[(String, String, Long)]): Seq[(String, String, Long)] ={
+  def distinct(prod: mutable.Seq[(String, String, Long)]): mutable.Seq[(String, String, Long)] ={
     val b = new ListBuffer[(String, String, Long)]
     val seen = mutable.HashSet[String]()
     for ((band, prodID, time) <- prod) {
@@ -124,7 +123,7 @@ object GoodsNewArrival {
     //TODO 新品推荐，同一个的品牌的商品不能都排在前几位
     var flag = 0
     var sign: String= null
-    for (i <- 0 until sortedArray.length) {
+    for (i <- sortedArray.indices) {
       if (sign == null) {
         sign = sortedArray(i)._1
         flag += 1

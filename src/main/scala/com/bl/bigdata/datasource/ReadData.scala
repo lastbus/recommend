@@ -16,14 +16,14 @@ object ReadData {
       .filter(_ != null)
   }
 
-  def readLocal(sc: SparkContext, path: String, delimiter: String = "\t"): RDD[Item] = {
-    sc.textFile(path).map(line => Item(line.split(delimiter)))
+  def readLocal(sc: SparkContext, path: String, delimiter: String = "\t"): RDD[Array[String]] = {
+    sc.textFile(path).map(line => line.split(delimiter))
   }
 
   def main(args: Array[String]) {
     val sc = new SparkContext(new SparkConf().setMaster("local[*]").setAppName("test"))
     val readIn = readLocal(sc, "D:\\2\\dim_category")
-    readIn.map{ case Item(Array(one, two, three, four, five, six, seven, eight)) =>
+    readIn.map{ case Array(one, two, three, four, five, six, seven, eight) =>
       (one, two, three, four, five, six, seven, eight)}
       .collect().foreach(println)
   }

@@ -131,7 +131,7 @@ class StopListenerActor(ssc: StreamingContext) extends Actor with StreamingLogge
       }
     case "stop" =>
       logger.info("stop streaming")
-      ssc.stop(true, true)
+      ssc.stop(stopSparkContext = true, stopGracefully = true)
       sys.exit(0)
     case e => logger.info("error message: %s".format(e))
   }

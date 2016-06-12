@@ -1,5 +1,6 @@
 package com.bl.bigdata.ranking
 
+import com.bl.bigdata.product.HotSaleGoods
 import org.junit._
 
 /**

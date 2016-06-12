@@ -1,8 +1,8 @@
-package com.bl.bigdata.useranalyze
+package com.bl.bigdata.similarity
 
-import com.bl.bigdata.util.{ToolRunner, ConfigurationBL, Tool}
-import org.apache.spark.{SparkContext, SparkConf}
+import com.bl.bigdata.util.{ConfigurationBL, Tool, ToolRunner}
 import com.redislabs.provider.redis._
+import org.apache.spark.{SparkConf, SparkContext}
 
 /**
   * Created by MK33 on 2016/3/31.
@@ -27,7 +27,7 @@ class BuyRecord extends Tool {
     val rawRDD = sc
       .textFile(inputPath).map(_.split("\t"))
       .map(array => (array(1), array(7), (array(3), array(6).substring(0, array(6).indexOf(" "))), array(9)))
-      .filter(_._2.equals("4000"))
+      .filter(tuple => tuple._2.equals("4000"))
       .map(s => (s._1, Seq((s._3, s._4)))) // 商品ID，商品种类
       .reduceByKey((s1, s2) => {accumulator += 1; s1 ++ s2})
       .map(item => ("rcmd_memid_shop_" + item._1, format(item._2)))

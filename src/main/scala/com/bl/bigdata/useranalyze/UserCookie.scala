@@ -20,7 +20,7 @@ class UserCookie extends Tool {
     val sql = "select registration_id, cookie_id, event_date from recommendation.memberid_cookieid"
     val rawRDD = ReadData.readHive(sc, sql).map{ case Array(registration, cookie, date) => (registration, cookie, date) }
     val r = rawRDD.map(r => (r._1, Seq((r._2, r._3)))).reduceByKey(_ ++ _)
-                  .map(r => { count += 1;
+                  .map(r => { count += 1
                     ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).distinct.mkString("#"))})
     saveListToRedis(r, count2)
     Message.addMessage(s"\t member_cookie_*： $count \n")

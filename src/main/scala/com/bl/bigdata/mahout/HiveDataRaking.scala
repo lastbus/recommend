@@ -1,6 +1,5 @@
 package com.bl.bigdata.mahout
 
-import java.io.{BufferedReader, InputStreamReader}
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -15,6 +14,7 @@ import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
+import org.apache.mahout.cf.taste.hadoop.item.RecommenderJob
 
 /**
  *
@@ -29,7 +29,6 @@ class HiveDataRaking extends Tool
     val tempOutput = ConfigurationBL.get("mahout.tmp.spark.output")
     val output = ConfigurationBL.get("mahout.tmp.hadoop.output")
     val dateCount = ConfigurationBL.get("mahout.day.count")
-    val cmdPath = ConfigurationBL.get("mahout.shell.path")
 //    val Array(tempOutput, output, dateCount) = args
     val start = getStartTime(dateCount)
     val sql = s"select member_id, behavior_type, goods_sid, dt " +
@@ -43,7 +42,7 @@ class HiveDataRaking extends Tool
                                     (cookie_id, behavior_type, goods_sid, dt) }
                           .filter (s => s._2 == "1000" || s._2 == "2000" ||s._2 == "3000" || s._2 == "4000" )
                           .map { item => (item._1, item._3, getRating(item._2, item._4, nowMills)) }
-    val users = ratingRDD.map(_._1).zipWithIndex
+    val users = ratingRDD.map(_._1).zipWithIndex()
     val tmp = "/tmp/userIndex"
     val fs = FileSystem.get(new Configuration)
     if (fs.exists(new Path(tmp))) fs.delete(new Path(tmp), true)
@@ -59,16 +58,7 @@ class HiveDataRaking extends Tool
     val tempPath = "/tmp/mahout"
     if (fs.exists(new Path(tempPath))) fs.delete(new Path(tempPath), true)
     if (fs.exists(new Path(output))) fs.delete(new Path(output), true)
-    val runtime = Runtime getRuntime
-    val  mahout = runtime exec cmdPath
-    val errorInputStream = new BufferedReader(new InputStreamReader(mahout.getErrorStream))
-    val msg = errorInputStream readLine()
-    while (msg != null)
-    {
-      Message addMessage msg
-    }
 
-    /**
     val job = new RecommenderJob()
     val sb = new StringBuilder()
     sb.append(" -s SIMILARITY_LOGLIKELIHOOD ")
@@ -78,12 +68,12 @@ class HiveDataRaking extends Tool
     sb.append(s"--tempDir $tempPath ")
     val args2 = sb.toString().split(" ").filter(_.length > 1)
     job.run(args2)
-    */
+
     val sc2 = SparkFactory.getSparkContext("user-item-rating")
     val users1 = sc2.textFile(tmp).map (s => {val a = s.split(","); (a(1), a(0))})
 //    val items2 = sc.textFile("/user/spark/items").map(s => {val a = s.split(","); (a(0), a(1))})
     val hadoopResult = sc2.textFile(output).map { s => val ab = s.split("\t"); (ab(0), ab(1)) }
-    val itemBasedResult = hadoopResult.join(users1).map { case (userIndex, (prefer, userId)) => (userId, prefer) }.distinct
+    val itemBasedResult = hadoopResult.join(users1).map { case (userIndex, (prefer, userId)) => (userId, prefer) }.distinct()
 
     val table = ConfigurationBL.get("mahout.table")
     val columnFamily = ConfigurationBL.get("mahout.table.column.family")
@@ -95,13 +85,16 @@ class HiveDataRaking extends Tool
     mrJob.setOutputFormatClass(classOf[TableOutputFormat[Put]])
     mrJob.setOutputKeyClass(classOf[ImmutableBytesWritable])
     mrJob.setOutputValueClass(classOf[Put])
-
+    val userAccumulator = sc2.accumulator(0)
     itemBasedResult.map { item =>
       val itemList = item._2.substring(1, item._2.length - 2)
       val put = new Put(Bytes.toBytes(item._1))
       put.addColumn(columnFamilyBytes, columnBytes, Bytes.toBytes(itemList))
+      userAccumulator += 1
       (new ImmutableBytesWritable(Bytes.toBytes("")), put)
     }.saveAsNewAPIHadoopDataset(mrJob.getConfiguration)
+
+    Message addMessage s"user number: $userAccumulator"
 
 //    sc2.stop()
 
@@ -134,7 +127,13 @@ object HiveDataRaking
   {
     ConfigurationBL.init()
     val tool = new HiveDataRaking with Timer
-    tool.run(args)
+    try {
+      tool.run(args)
+    } catch {
+      case e: Throwable =>
+        println(e getMessage)
+        Message addMessage (e getMessage)
+    }
     SparkFactory.destroyResource()
   }
 }

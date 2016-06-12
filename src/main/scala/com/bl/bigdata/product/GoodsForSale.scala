@@ -1,4 +1,4 @@
-package com.bl.bigdata.ranking
+package com.bl.bigdata.product
 
 import com.bl.bigdata.accumulator.MyAccumulator._
 import com.bl.bigdata.mail.Message

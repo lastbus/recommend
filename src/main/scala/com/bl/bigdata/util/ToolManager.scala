@@ -2,10 +2,9 @@ package com.bl.bigdata.util
 
 import com.bl.bigdata.mahout.HiveDataRaking
 import com.bl.bigdata.mail.Message
-import com.bl.bigdata.product.GoodsNewArrival
-import com.bl.bigdata.ranking.{GoodsForSale, HotSaleGoods}
+import com.bl.bigdata.product.{HotSaleGoods, GoodsForSale, GoodsNewArrival}
 import com.bl.bigdata.search.Search
-import com.bl.bigdata.similarity.{BuyGoodsSimilarity, SeeBuyGoodsSimilarity, BrowserGoodsSimilarity}
+import com.bl.bigdata.similarity._
 import com.bl.bigdata.tfidf.GoodsSimilarityInCate
 import com.bl.bigdata.useranalyze._
 

@@ -64,7 +64,7 @@ class BrowserGoodsSimilarity extends Tool {
                                         .map { case (good2, ((good1, freq), good2Freq1)) => (good1, Seq((good2, freq.toDouble / good2Freq1))) }
                                         .reduceByKey((s1, s2) => s1 ++ s2)
                                         .mapValues(v => v.sortWith(_._2 > _._2).take(20))
-                                        .map { case (goods1, goods2) => {accumulator += 1; (prefix + goods1, goods2.map(_._1).mkString("#")) }}
+                                        .map { case (goods1, goods2) => accumulator += 1; (prefix + goods1, goods2.map(_._1).mkString("#")) }
 
     // 保存到 redis 中
     if (redis) {

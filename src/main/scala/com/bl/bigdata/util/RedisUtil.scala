@@ -17,7 +17,7 @@ object RedisUtil extends RedisBase with Serializable {
         connect(sparkConf)
         val jedisPool = getJedisPool
         val jedis = jedisPool.getResource
-        import com.bl.bigdata.util.Implicts.map2HashMap
+        import .map2HashMap
         values.map{v =>
             val map = v._2.map{r => (r.product.toString, r.rating.toString)}.distinct.toMap
             if(map.nonEmpty) {
