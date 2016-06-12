@@ -1,5 +1,6 @@
 package com.bl.bigdata.useranalyze
 
+import com.bl.bigdata.similarity.Guess
 import org.junit.Test
 
 /**

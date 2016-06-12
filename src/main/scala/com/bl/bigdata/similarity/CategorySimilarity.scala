@@ -1,4 +1,4 @@
-package com.bl.bigdata.useranalyze
+package com.bl.bigdata.similarity
 
 import java.text.SimpleDateFormat
 import java.util.Date

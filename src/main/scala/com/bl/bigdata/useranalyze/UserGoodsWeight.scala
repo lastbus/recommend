@@ -18,6 +18,7 @@ import org.json.{JSONArray, JSONObject}
 /**
 *  Created by MK33 on 2016/4/25.
 */
+
 class UserGoodsWeight extends Tool
 {
   val decayCoefficient = ConfigurationBL.get("interest.decay.coefficient").toDouble //兴趣衰减系数
@@ -43,6 +44,7 @@ class UserGoodsWeight extends Tool
     val trainRDD = rawRDD.map { case Array(cookie, category, categoryName, brand, behavior, eventDate) =>
                               (cookie, category, categoryName, brand, behavior, eventDate) }
                          .map(s => (s._1, s._2, s._3, s._4, if (decay) getRating2(s._5, s._6, now) else getRating(s._5)))
+
     trainRDD.cache()
     // 每个类别，用户浏览的最大次数
     val categoryMap = trainRDD.map { case (cookie, category, categoryName, brand, rating) => ((cookie, category), 1L) }

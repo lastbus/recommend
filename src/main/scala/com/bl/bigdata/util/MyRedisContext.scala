@@ -1,10 +1,10 @@
 package com.bl.bigdata.util
 
-import com.redislabs.provider.redis.{RedisEndpoint, RedisConfig, RedisContext}
+import com.redislabs.provider.redis.{RedisConfig, RedisContext, RedisEndpoint}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import Implicts._
-import redis.clients.jedis.{JedisPoolConfig, JedisPool}
+import redis.clients.jedis.{JedisPool, JedisPoolConfig}
+import scala.collection.JavaConversions._
 
 /**
   * Created by MK33 on 2016/3/25.
@@ -32,15 +32,15 @@ object MyRedisContext {
       mapValues(a => a.map(p => p._2)).foreach {
       x => {
         val conn = x._1.endpoint.connect()
-        val pipeline = x._1.endpoint.connect.pipelined
+        val pipeline = x._1.endpoint.connect().pipelined
         if (ttl <= 0) {
           x._2.foreach(x => pipeline.hmset(x._1, x._2))
         }
         else {
           x._2.foreach(x => pipeline.expire(x._1, ttl))
         }
-        pipeline.sync
-        conn.close
+        pipeline.sync()
+        conn.close()
       }
     }
   }
@@ -52,11 +52,8 @@ object JedisPoolTest {
 
   def main(args: Array[String]) {
     val jedisPool = new JedisPool(new JedisPoolConfig, "localhost")
-    import com.bl.bigdata.util.Implicts._
     val jedis = jedisPool.getResource
-//    jedis.set("jedis", "not returned back jedis.")
-    val map = Map("a" -> "1", "b" -> "2")
-//    jedis.hmset("map", map)
+    //    jedis.hmset("map", map)
     jedis.del("map")
     jedis.close()
     jedisPool.destroy()

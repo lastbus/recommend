@@ -24,11 +24,11 @@ class MyFPGrowth extends Tool{
 
     val rawRDD = sc.textFile(input).map(_.split("\t"))
       .map(array => (array(0), array(7), array(3)))
-      .filter(_._2.equals("4000")).map(s => (s._1, Seq(s._3))).reduceByKey(_ ++ _).map(_._2.toArray.distinct)
+      .filter(tuple => tuple._2.equals("4000")).map(s => (s._1, Seq(s._3))).reduceByKey(_ ++ _).map(_._2.toArray.distinct)
 
 //    rawRDD.first().foreach(println)
-    val fpModel = new FPGrowth().setMinSupport(0.0001).run(rawRDD).freqItemsets.filter(_.items.length > 1).collect().foreach { itemset =>
-  println(itemset.items.mkString("[", ",", "]") + ", " + itemset.freq)}
+    new FPGrowth().setMinSupport(0.0001).run(rawRDD).freqItemsets.filter(_.items.length > 1).collect().foreach { itemset =>
+    println(itemset.items.mkString("[", ",", "]") + ", " + itemset.freq)}
   }
 }
 

@@ -1,10 +1,10 @@
 package com.bl.bigdata.util
 
+import com.bl.bigdata.mahout.HiveDataRaking
 import com.bl.bigdata.mail.Message
-import com.bl.bigdata.product.GoodsNewArrival
-import com.bl.bigdata.ranking.{GoodsForSale, HotSaleGoods}
+import com.bl.bigdata.product.{HotSaleGoods, GoodsForSale, GoodsNewArrival}
 import com.bl.bigdata.search.Search
-import com.bl.bigdata.similarity.{BuyGoodsSimilarity, SeeBuyGoodsSimilarity, BrowserGoodsSimilarity}
+import com.bl.bigdata.similarity._
 import com.bl.bigdata.tfidf.GoodsSimilarityInCate
 import com.bl.bigdata.useranalyze._
 
@@ -38,7 +38,7 @@ class ToolManager extends Tool {
 //      list += new GoodsSimilarityInCate with ToolRunner // 同一类别商品的相似度
 //      list += new UserGoodsWeight with ToolRunner //
     } else {
-      val map: Map[String, Tool] = Map("BrowserGoodsSimilarity".toLowerCase -> new BrowserGoodsSimilarity with ToolRunner,
+      val map: Map[String, Tool] = Map ("BrowserGoodsSimilarity".toLowerCase -> new BrowserGoodsSimilarity with ToolRunner,
         "SeeBuyGoodsSimilarity".toLowerCase -> new SeeBuyGoodsSimilarity with ToolRunner,
         "BuyGoodsSimilarity".toLowerCase -> new BuyGoodsSimilarity with ToolRunner,
         "CategorySimilarity".toLowerCase -> new CategorySimilarity with ToolRunner,
@@ -52,7 +52,8 @@ class ToolManager extends Tool {
         "GoodsNewArrival".toLowerCase -> new GoodsNewArrival with ToolRunner,
         "als" -> new Guess with ToolRunner,
         "search" -> new Search with ToolRunner,
-        "persona" -> new Persona with ToolRunner)
+        "persona" -> new Persona with ToolRunner,
+        "mahout" -> new HiveDataRaking with ToolRunner)
       for (arg <- args; key = arg.toLowerCase if map.contains(key)) list += map(key)
     }
   }

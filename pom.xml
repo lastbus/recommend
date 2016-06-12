@@ -8,8 +8,7 @@
     <properties>
         <scala.version>2.10.4</scala.version>
         <java.version>1.7</java.version>
-        <cdh.version>1.3.0-cdh5.4.8</cdh.version>
-        <hbase.version>1.0.0-cdh5.4.8</hbase.version>
+        <cdh.version>cdh5.4.8</cdh.version>
     </properties>
 
     <repositories>
@@ -19,31 +18,92 @@
         </repository>
     </repositories>
     <dependencies>
+
+         <!-- hadoop -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client</artifactId>
+            <version>2.6.0-${cdh.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.mahout</groupId>
+            <artifactId>mahout-core</artifactId>
+            <version>0.9-${cdh.version}</version>
+        </dependency>
+
+        <!-- hbase -->
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-client</artifactId>
+            <version>1.0.0-${cdh.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-server</artifactId>
+            <version>1.0.0-${cdh.version}</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.mortbay.jetty</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- spark -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-core_2.10</artifactId>
+            <version>1.3.0-${cdh.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-streaming_2.10</artifactId>
+            <version>1.3.0-${cdh.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_2.10</artifactId>
-            <version>1.3.0</version>
+            <version>1.3.0-${cdh.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-hive_2.10</artifactId>
-            <version>${cdh.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <!-- spark -->
-        <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-assembly_2.10</artifactId>
-            <version>${cdh.version}</version>
+            <version>1.3.0-${cdh.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-mllib_2.10</artifactId>
-            <version>1.3.0</version>
+            <version>1.3.0-${cdh.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-streaming-kafka_2.10</artifactId>
+            <version>1.3.0-${cdh.version}</version>
+            <!--<scope>provided</scope>-->
+        </dependency>
+
+        <!--  redis  -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>2.8.0</version>
+        </dependency>
+
+        <!--kafaka-->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>0.9.0.1</version>
+        </dependency>
+
         <dependency>
             <groupId>org.scalanlp</groupId>
             <artifactId>breeze-math_2.10</artifactId>
@@ -59,7 +119,7 @@
             <artifactId>commons-email</artifactId>
             <version>1.4</version>
         </dependency>
-        <!--  本地运行测试把用到的hadoop相关jar包依赖“<scope>provide</scope>”注释掉，否则无法运行。 -->
+
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
@@ -70,51 +130,23 @@
             <artifactId>log4j-core</artifactId>
             <version>2.5</version>
         </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-web</artifactId>
-            <version>2.5</version>
-        </dependency>
+        <!--<dependency>-->
+            <!--<groupId>org.apache.logging.log4j</groupId>-->
+            <!--<artifactId>log4j-web</artifactId>-->
+            <!--<version>2.5</version>-->
+        <!--</dependency>-->
         <dependency>
             <groupId>commons-pool</groupId>
             <artifactId>commons-pool</artifactId>
             <version>1.5.4</version>
         </dependency>
-        <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-common</artifactId>
-            <version>2.6.0</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hbase</groupId>
-            <artifactId>hbase-client</artifactId>
-            <version>${hbase.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hbase</groupId>
-            <artifactId>hbase-server</artifactId>
-            <version>${hbase.version}</version>
-            <scope>provided</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.mortbay.jetty</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <!--  redis  -->
-        <dependency>
-            <groupId>redis.clients</groupId>
-            <artifactId>jedis</artifactId>
-            <version>2.8.0</version>
-        </dependency>
+
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>
             <version>${scala.version}</version>
         </dependency>
+
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -127,9 +159,10 @@
             <version>1.2.11</version>
         </dependency>
 
+
     </dependencies>
     <build>
-        <sourceDirectory>src/main/java</sourceDirectory>
+        <sourceDirectory>src/main/scala</sourceDirectory>
         <plugins>
             <plugin>
                 <groupId>org.scala-tools</groupId>
@@ -167,7 +200,7 @@
                         <configuration>
                             <archive>
                                 <manifest>
-                                    <!--<mainClass>com.bl.bigdata.similarity.GuessWhatYouLike$</mainClass>-->
+                                    <mainClass>com.bl.bigdata.kafka.ProducerDemo</mainClass>
                                     <addClasspath>true</addClasspath>
                                 </manifest>
                             </archive>

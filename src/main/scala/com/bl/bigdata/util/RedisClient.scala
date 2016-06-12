@@ -14,7 +14,7 @@ object RedisClient extends Serializable with Logging with Redis {
   lazy val pool = new JedisPool(conf, host, port, timeout)
 
   lazy val hook = new Thread {
-    override def run = {
+    override def run() = {
       logger.info("Execute hook thread: " + this)
       pool.destroy()
     }
