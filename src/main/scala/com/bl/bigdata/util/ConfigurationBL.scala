@@ -29,7 +29,6 @@ object ConfigurationBL extends ConfigurableBL {
     val xml = XML.load(path)
     val properties = xml \ "property"
     val size = properties.length
-    logger.debug(size)
     val keyValues = new Array[(String, String)](size)
     var i = 0
     for (property <- properties) {
@@ -39,10 +38,10 @@ object ConfigurationBL extends ConfigurableBL {
       logger.debug(name.text + " : " + value.text)
       i += 1
     }
-    logger.info(s"parse finished, loaded ${size} properties.")
+    logger.debug(s"parse finished, loaded $i properties.")
     if (!keyValues.isEmpty)
       for ((key, value) <- keyValues) {
-        if(setting.containsKey(key))
+        if (setting.containsKey(key))
           logger.warn(s"$key's origin value ${setting.get(key)} is overriding by $value.")
         setting.put(key, value)
       }

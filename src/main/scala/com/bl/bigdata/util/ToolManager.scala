@@ -32,7 +32,7 @@ class ToolManager extends Tool {
       list += new BuyActivityStatistic with ToolRunner // 上午 下午 晚上 购买类目
       list += new BrowserNotBuy with ToolRunner // 最近两个月浏览未购买商品 按时间排序
       list += new HotSaleGoods with ToolRunner // 品类热销商品
-      list += new GoodsForSale with ToolRunner // goods for sale
+//      list += new GoodsForSale with ToolRunner // goods for sale
       list += new UserCookie with ToolRunner // 将用户 ID 和 cookieID 导入到 redis
       list += new GoodsNewArrival with ToolRunner // 新上线商品
 //      list += new GoodsSimilarityInCate with ToolRunner // 同一类别商品的相似度
