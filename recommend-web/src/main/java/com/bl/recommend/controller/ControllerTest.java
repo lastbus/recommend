@@ -30,7 +30,7 @@ public class ControllerTest
     public String angularJSTest()
     {
         System.out.println("=======  angularJS test  =======");
-        return "AngularJS test";
+        return "{\"test\": \"AngularJS test\"}";
     }
 
 

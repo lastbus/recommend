@@ -1,6 +1,6 @@
 <!-- list -->
 <ul class="nav">
-  <li>
+  <li ng-class="{active:$state.includes('app.recommend')}">
     <a href class="auto">
       <span class="pull-right text-muted">
         <i class="fa fa-fw fa-angle-right text"></i>
@@ -10,12 +10,16 @@
     </a>
     <ul class="nav nav-sub dk">
       <li ui-sref-active="active">
-        <a ui-sref="app.dashboard-v1">
+
+        <a ui-sref="app.table.static">
           <span>关键词黑名单</span>
+
         </a>
       </li>
     </ul>
   </li>
+
+
   <li>
     <a href class="auto">
       <span class="pull-right text-muted">
@@ -26,11 +30,6 @@
     </a>
 
     <ul class="nav nav-sub dk">
-      <li ui-sref-active="active">
-        <a ui-sref="app.dashboard-v1">
-          <span>关键词黑名单</span>
-        </a>
-      </li>
       <li ui-sref-active="active">
         <a ui-sref="app.dashboard-v">
           增加推荐引擎

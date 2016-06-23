@@ -153,7 +153,13 @@ angular.module('app')
               })
               .state('app.table.static', {
                   url: '/static',
-                  templateUrl: 'tpl/table_static.html'
+                  templateUrl: 'tpl/table_static.html',
+                  resolve: {
+                      deps: ['$ocLazyLoad',
+                          function($ocLazyLoad){
+                              return $ocLazyLoad.load('js/controllers/http.js')
+                          }]
+                  }
               })
               .state('app.table.datatable', {
                   url: '/datatable',
@@ -529,6 +535,16 @@ angular.module('app')
                     url: '/playlist/{fold}',
                     templateUrl: 'tpl/music.playlist.html'
                 })
+                .state('app.recommend', {
+                    url: '/recommend',
+                    templateUrl: '<div ui-view></div>'
+                })
+                .state('app.recommend.keyword.blacklist', {
+                    url: '/keyword',
+                    templateUrl: 'tpl/table_static.html'
+                })
+
+
       }
     ]
   );
