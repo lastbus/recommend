@@ -53,7 +53,9 @@ class GoodsForSale extends Tool {
                                         count3Accumulator += 1
                                         (prefix2 + categoryID, goodsID.mkString("#"))}
 //    sc.toRedisKV(categoryIDToGoodsID)
-    saveToRedis(categoryIDToGoodsID, count4Accumulator)
+    val redisType = ConfigurationBL.get("redis.type")
+//    saveToRedis(categoryIDToGoodsID, count4Accumulator)
+    RedisClient.sparkKVToRedis(categoryIDToGoodsID, count4Accumulator, redisType)
     Message.addMessage(s"\t插入 $prefix2*: $count3Accumulator\n")
     Message.addMessage(s"\t插入 $prefix2*: $count4Accumulator\n")
     logger.info("\t商品类别下面有哪些商品计算结束。")

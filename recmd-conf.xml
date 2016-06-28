@@ -107,6 +107,10 @@
         <name>buy.activity.category.topNum</name>
         <value>30</value>
     </property>
+    <property>
+        <name>mail.to</name>
+        <value>Ke.Ma@bl.com</value>
+    </property>
 
 
     <property>
@@ -120,5 +124,9 @@
     <property>
         <name>redis.timeout</name>
         <value>10000</value>
+    </property>
+    <property>
+        <name>redis.model</name>
+        <value>cluster</value>
     </property>
 </configuration>

@@ -55,7 +55,9 @@ class SeeBuyGoodsSimilarity extends Tool {
 
     // 如果是本地运行，则直接输出，否则保存在 hadoop 中。
     if (redis) {
-      saveToRedis2(browserAndBuy, accumulator2)
+      val redisType = ConfigurationBL.get("redis.type")
+//      saveToRedis2(browserAndBuy, accumulator2, redisType)
+      RedisClient.sparkKVToRedis(browserAndBuy, accumulator2, redisType)
       Message.message.append(s"\t$prefix*: $accumulator\n")
       Message.message.append(s"\t插入 redis $prefix*: $accumulator2\n")
 
@@ -65,15 +67,27 @@ class SeeBuyGoodsSimilarity extends Tool {
     logger.info("看了最终买计算结束。")
   }
 
-  def saveToRedis2(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+  def saveToRedis2(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
     rdd.foreachPartition(partition => {
       try {
-        val jedis = RedisClient.pool.getResource
-        partition.foreach(s => {
-          jedis.set(s._1, s._2)
-          accumulator += 1
-        })
-        jedis.close()
+        redisType match {
+          case "cluster" =>
+            val jedis = RedisClient.jedisCluster
+            partition.foreach { s =>
+              jedis.set(s._1, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case "standalone" =>
+            val jedis = RedisClient.pool.getResource
+            partition.foreach { s =>
+              jedis.set(s._1, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case _ => logger.error(s"wrong redis type $redisType ")
+        }
+
       } catch {
         case e: Exception => Message.addMessage(e.getMessage)
       }

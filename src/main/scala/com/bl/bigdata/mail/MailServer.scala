@@ -45,4 +45,14 @@ object MailServer {
       email
     }
   }
+
+  def main(args: Array[String]) {
+    ConfigurationBL.init()
+    val email = getEmail("tt")
+    val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
+    email.setMsg("test")
+    email.setSubject("redis report: " + sdf.format(new Date))
+    logger.info(s"send email:")
+    email.send
+  }
 }

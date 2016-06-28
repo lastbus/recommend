@@ -5,10 +5,12 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import redis.clients.jedis.{JedisPool, JedisPoolConfig}
 
+import scala.collection.JavaConversions._
+
 /**
   * Created by MK33 on 2016/3/25.
   */
-class MyRedisContext(sc: SparkContext) extends RedisContext(sc) {
+class MyRedisContext(sc: SparkContext) extends RedisContext(sc) with Serializable {
 
   import MyRedisContext._
 
@@ -50,10 +52,11 @@ object MyRedisContext {
 object JedisPoolTest {
 
   def main(args: Array[String]) {
+
     val jedisPool = new JedisPool(new JedisPoolConfig, "localhost")
     val jedis = jedisPool.getResource
-    //    jedis.hmset("map", map)
-    jedis.del("map")
+//    jedis.del("map")/**/
+    jedis.set("tt", "555")
     jedis.close()
     jedisPool.destroy()
   }

@@ -111,7 +111,9 @@ class GoodsSimilarityInCate extends Tool with Serializable {
 
     if (redis) {
       val accumulator = sc.accumulator(0)
-      saveToRedis(similarity, accumulator)
+      val redisType = ConfigurationBL.get("redis.type")
+//      saveToRedis(similarity, accumulator)
+      RedisClient.sparkKVToRedis(similarity, accumulator, redisType)
       Message.addMessage(s"\t插入 redis rcmd_sim_* :  $accumulator\n ")
     }
 

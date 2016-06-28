@@ -40,7 +40,9 @@ class BrowserNotBuy extends Tool {
                                     (prefix + item._1, item._2.distinct.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).mkString(",")).mkString("#"))})
     browserNotBuy.persist()
     if (redis) {
-      saveToRedis(browserNotBuy, accumulator2)
+      val redisType = ConfigurationBL.get("redis.type")
+//      saveToRedis(browserNotBuy, accumulator2, redisType)
+      RedisClient.sparkKVToRedis(browserNotBuy, accumulator2, redisType)
       Message.addMessage(s"\t$prefix*: $accumulator\n")
       Message.addMessage(s"\t插入 redis $prefix*: $accumulator2\n")
     }
@@ -57,15 +59,26 @@ class BrowserNotBuy extends Tool {
     items.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).mkString(",")).mkString("#")
   }
 
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
     rdd.foreachPartition(partition => {
       try {
-        val jedis = RedisClient.pool.getResource
-        partition.foreach(s => {
-          jedis.set(s._1, s._2)
-          accumulator += 1
-        })
-        jedis.close()
+        redisType match {
+          case "cluster" =>
+            val jedis = RedisClient.jedisCluster
+            partition.foreach { s =>
+              jedis.set(s._1, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case "standalone" =>
+            val jedis = RedisClient.pool.getResource
+            partition.foreach { s =>
+              jedis.set(s._1, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case _ => logger.error(s"wrong redis type $redisType ")
+        }
       } catch {
         case e: Exception => Message.addMessage(e.getMessage)
       }

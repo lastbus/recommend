@@ -47,7 +47,10 @@ class GoodsNewArrival extends Tool {
 
     val appResult = calculate(appRDD).map(s => (prefixAPP + s._1, s._2))
     val appAccumulator = sc.accumulator(0)
-    saveToRedis(appResult, appAccumulator)
+    val redisType = ConfigurationBL.get("redis.type")
+
+//    saveToRedis(appResult, appAccumulator)
+    RedisClient.sparkKVToRedis(appResult, appAccumulator, redisType)
     Message.addMessage(s"\tpc: 插入 redis $prefixAPP* :\t $appAccumulator")
 
     logger.info("新品上市计算结束。")

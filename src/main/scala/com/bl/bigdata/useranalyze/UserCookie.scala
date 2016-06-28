@@ -2,7 +2,7 @@ package com.bl.bigdata.useranalyze
 
 import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
-import com.bl.bigdata.util.{RedisClient, SparkFactory, Tool, ToolRunner}
+import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 
@@ -22,7 +22,9 @@ class UserCookie extends Tool {
     val r = rawRDD.map(r => (r._1, Seq((r._2, r._3)))).reduceByKey(_ ++ _)
                   .map(r => { count += 1
                     ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).distinct.mkString("#"))})
-    saveListToRedis(r, count2)
+    val redisType = ConfigurationBL.get("redis.type")
+//    saveListToRedis(r, count2)
+    RedisClient.sparkKVToRedis(r, count2, redisType)
     Message.addMessage(s"\t member_cookie_*： $count \n")
     Message.addMessage(s"\t插入 redis member_cookie_*： $count2 \n")
 

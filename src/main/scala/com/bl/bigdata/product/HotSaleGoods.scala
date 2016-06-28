@@ -48,8 +48,10 @@ class HotSaleGoods extends Tool {
                           .map { case (category, seq) => {accumulator += 1; (prefix + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) }}
     result.cache()
     if(redis) {
+      val redisType = ConfigurationBL.get("redis.type")
 //      sc.toRedisKV(result)
-      saveToRedis(result, accumulator2)
+//      saveToRedis(result, accumulator2, redisType)
+      RedisClient.sparkKVToRedis(result, accumulator2, redisType)
       Message.addMessage(s"\t$prefix*: $accumulator\n")
       Message.addMessage(s"\t插入 redis $prefix*: $accumulator2\n")
     }
@@ -75,15 +77,26 @@ class HotSaleGoods extends Tool {
     logger.info("品类热销计算结束。")
   }
 
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
     rdd.foreachPartition(partition => {
       try {
-        val jedis = RedisClient.pool.getResource
-        partition.foreach(s => {
-          jedis.set(s._1, s._2)
-          accumulator += 1
-        })
-        jedis.close()
+        redisType match {
+          case "cluster" =>
+            val jedis = RedisClient.jedisCluster
+            partition.foreach { s =>
+              jedis.set(s._1, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case "standalone" =>
+            val jedis = RedisClient.pool.getResource
+            partition.foreach { s =>
+              jedis.set(s._1, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case _ => logger.error(s"wrong redis type $redisType ")
+        }
       } catch {
         case e: Exception => Message.addMessage(e.getMessage)
       }

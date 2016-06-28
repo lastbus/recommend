@@ -65,7 +65,9 @@ class BuyGoodsSimilarity extends Tool{
                         .mapValues(seq => { accumulator += 1; seq.sortWith(_._2 > _._2).map(_._1).mkString("#")})
     sorting.persist()
     if (redis) {
-      saveToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2)
+      val redisType = ConfigurationBL.get("redis.type")
+//      saveToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2, redisType)
+      RedisClient.sparkKVToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2, redisType)
       Message.addMessage(s"\tr$prefix*: $accumulator.\n")
       Message.addMessage(s"\t插入 redis $prefix*: $accumulator2.\n")
     }
@@ -74,15 +76,26 @@ class BuyGoodsSimilarity extends Tool{
 
   }
 
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
     rdd.foreachPartition(partition => {
       try {
-        val jedis = RedisClient.pool.getResource
-        partition.foreach(s => {
-          jedis.set(s._1, s._2)
-          accumulator += 1
-        })
-        jedis.close()
+        redisType match {
+          case "cluster" =>
+            val jedis = RedisClient.jedisCluster
+            partition.foreach { s =>
+              jedis.set(s._1, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case "standalone" =>
+            val jedis = RedisClient.pool.getResource
+            partition.foreach { s =>
+              jedis.set(s._1, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case _ => logger.error(s"wrong redis type $redisType ")
+        }
       } catch {
         case e: Exception => Message.addMessage(e.getMessage)
       }
