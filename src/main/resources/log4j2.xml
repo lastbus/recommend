@@ -24,7 +24,7 @@
         </RollingFile>
     </Appenders>
     <Loggers>
-        <Root name="console" level="debug">
+        <Root name="com.bl.bigdata" level="debug">
             <AppenderRef ref="Console" />
         </Root>
 

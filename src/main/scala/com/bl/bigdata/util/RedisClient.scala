@@ -1,7 +1,7 @@
 package com.bl.bigdata.util
 
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig
-import redis.clients.jedis.JedisPool
+import redis.clients.jedis.{JedisCluster, HostAndPort, JedisPool}
 
 /**
   * Created by MK33 on 2016/4/7.
@@ -21,6 +21,15 @@ object RedisClient extends Serializable with Logging with Redis {
   }
 
   sys.addShutdownHook(hook.run)
+
+  lazy val jedisCluster = {
+
+    val set = new java.util.HashSet[HostAndPort]
+    set.add(new HostAndPort("10.201.129.74", 6379))
+    set.add(new HostAndPort("10.201.129.75", 6379))
+    set.add(new HostAndPort("10.201.129.80", 6379))
+    new JedisCluster(set)
+  }
 
 
 }
