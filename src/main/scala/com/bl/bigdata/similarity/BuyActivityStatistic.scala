@@ -6,7 +6,6 @@ import java.util.Date
 import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import redis.clients.jedis.Jedis
 
 /**
   * 1. 统计上午、下午、晚上 购买类目top 20
@@ -60,11 +59,12 @@ class BuyActivityStatistic extends Tool {
                         .take(num).map(_._1).mkString("#")
 
     if (redis){
-      val jedis = new Jedis(ConfigurationBL.get("redis.host"), ConfigurationBL.get("redis.port", "6379").toInt)
-      jedis.set("rcmd_topcategory_forenoon", morning)
-      jedis.set("rcmd_topcategory_afternoon", noon)
-      jedis.set("rcmd_topcategory_evening", evening)
-      jedis.close()
+//      val jedis = new Jedis(ConfigurationBL.get("redis.host"), ConfigurationBL.get("redis.port", "6379").toInt)
+      val jedisCluster = RedisClient.jedisCluster
+      jedisCluster.set("rcmd_topcategory_forenoon", morning)
+      jedisCluster.set("rcmd_topcategory_afternoon", noon)
+      jedisCluster.set("rcmd_topcategory_evening", evening)
+//      jedis.close()
       Message.addMessage(s"\t上午:\n\t\t$morning\n")
       Message.addMessage(s"\t中午:\n\t\t$noon\n")
       Message.addMessage(s"\t晚上:\n\t\t$evening\n")

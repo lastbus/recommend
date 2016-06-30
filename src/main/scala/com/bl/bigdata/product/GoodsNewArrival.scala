@@ -5,7 +5,7 @@ import java.util.Date
 
 import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
-import com.bl.bigdata.util.{ConfigurationBL, RedisClient, SparkFactory, Tool}
+import com.bl.bigdata.util.{RedisClient, ConfigurationBL, SparkFactory, Tool}
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 
@@ -42,15 +42,17 @@ class GoodsNewArrival extends Tool {
 
     val pcResult = calculate(pcRDD).map(s => (prefixPC + s._1, s._2))
     val pcAccumulator = sc.accumulator(0)
-    saveToRedis(pcResult, pcAccumulator)
+
+    val redisType = ConfigurationBL.get("redis.type")
+
+    saveToRedis(pcResult, pcAccumulator, redisType)
     Message.addMessage(s"\tpc: 插入 redis $prefixPC* :\t $pcAccumulator")
 
     val appResult = calculate(appRDD).map(s => (prefixAPP + s._1, s._2))
     val appAccumulator = sc.accumulator(0)
-    val redisType = ConfigurationBL.get("redis.type")
 
-//    saveToRedis(appResult, appAccumulator)
-    RedisClient.sparkKVToRedis(appResult, appAccumulator, redisType)
+    saveToRedis(appResult, appAccumulator, redisType)
+//    RedisClient.sparkKVToRedis(appResult, appAccumulator, redisType)
     Message.addMessage(s"\tpc: 插入 redis $prefixAPP* :\t $appAccumulator")
 
     logger.info("新品上市计算结束。")
@@ -96,17 +98,27 @@ class GoodsNewArrival extends Tool {
   }
 
 
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
+  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
     val expireTime = ConfigurationBL.get("goods.new.arrival.expire", "604800").toInt
     rdd.foreachPartition(partition => {
       try {
-        val jedis = RedisClient.pool.getResource
-        partition.foreach(s => {
-          jedis.set(s._1, s._2)
-          jedis.expire(s._1, expireTime.toInt)
-          accumulator += 1
-        })
-        jedis.close()
+        redisType match {
+          case "cluster" =>
+            val jedisCluster = RedisClient.jedisCluster
+            partition.foreach { s =>
+              jedisCluster.setex(s._1, expireTime.toInt, s._2)
+              accumulator += 1
+            }
+          case "standalone" =>
+            val jedis = RedisClient.pool.getResource
+            partition.foreach { s =>
+              jedis.setex(s._1, expireTime.toInt, s._2)
+              accumulator += 1
+            }
+            jedis.close()
+          case _ => logger.error(s"wrong redis type $redisType ")
+        }
+
       } catch {
         case e: Exception => Message.addMessage(e.getMessage)
       }
