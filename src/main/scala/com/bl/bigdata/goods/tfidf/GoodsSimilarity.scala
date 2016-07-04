@@ -1,0 +1,149 @@
+package com.bl.bigdata.goods.tfidf
+
+import breeze.linalg.{SparseVector => BSV, norm}
+import com.bl.bigdata.config.HbaseConfig
+import com.bl.bigdata.datasource.ReadData
+import com.bl.bigdata.util._
+import org.apache.hadoop.hbase.client.{HTable, Put}
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.hbase.{HBaseConfiguration, TableName}
+import org.apache.spark.mllib.linalg.{SparseVector => SV, _}
+import org.apache.spark.rdd.RDD
+
+import scala.collection.mutable
+
+
+class GoodsSimilarity extends  java.io.Serializable{
+  /** TF-IDF 的维度大小*/
+   val featuresNum = 1 << 16
+   def run(args: Array[String]): Unit = {
+    val sc = SparkFactory.getSparkContext("同类商品属性相似度")
+    val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
+      " from recommendation.product_properties_raw_data"
+    val rawRDD =  ReadData.readHive(sc, sql).map{ case Array(goodsID, itemNo, category, band, price, attribute) =>
+                                                  (goodsID, itemNo, category, band, attribute, price) }
+
+    // 计算每个类别的商品价格分布，分为 5 份，假设每个类别的商品价格数大于 5 个。
+    val categoryRDD = rawRDD.map { case (goodsID, itemNo, category, band, attribute, price) => (category, price) }
+                            .filter { case (category, price) => !price.equalsIgnoreCase("NULL") }
+                            .map { case (category, price) => (category, Seq(price.toDouble)) }
+                            .reduceByKey(_ ++ _)
+                            .map { case (category, priceSeq) =>
+                              val sortedSeq = priceSeq.distinct.sorted
+                              val size = sortedSeq.size
+                              // 0%, 20%, 40%, 60%, 80%
+                              (category, List(0.0, sortedSeq(size * 2 / 10), sortedSeq(size * 4 / 10),
+                                sortedSeq(size * 6 / 10), sortedSeq(size * 8 / 10)))
+                            }
+
+    val tf = rawRDD.map { case (goodsID, itemNo, category, brand, attribute, price) =>
+                          (goodsID, (itemNo, category, brand, Seq(attribute), price)) }
+                    // 搜集某个商品的属性
+                    .reduceByKey((s1, s2) => {(s1._1, s1._2, s1._3, s1._4 ++ s2._4, s1._5)})
+                    .map { case (goodsID, (itemNo, category, brand, attributes, price)) =>
+                      (category, (itemNo, goodsID, brand, attributes, price))}
+                    .join(categoryRDD)
+                    .map { case (category, ((itemNo, goodsID, brand, attributes, price), priceArray)) =>
+                      // 计算商品属性的 TF
+                      val attrVector = calculatorTF(attributes, price, priceArray)
+                      (category, (goodsID, itemNo, brand, attrVector))
+                    }
+
+    //calculator IDF
+    val idf: RDD[(String, Vector)] = tf.aggregateByKey(new DocumentFrequencyAggregator())(seqOp = (df, v) => df.add(v._4),
+      combOp = (df1, df2) => {
+        df1.merge(df2)
+      })
+      .map { case (category, df) => (category, df.idf()) }
+    // calculator tf-idf
+    val tfIDF = tf.join(idf).map { case (category, ((no, itemNo, brand, attrVector), idf2)) =>
+      (category, (no, IDFModel.transform(idf2, attrVector)))
+    }
+
+    // calculator simplicity in category
+    val similarity = tfIDF.join(tfIDF).map { case (category, (tfidf1, tfidf2)) =>
+      val id1 = tfidf1._1
+      val id2 = tfidf2._1
+      val cosSim = if (id1.equals(id2)) 0.0
+      else {
+        val sv1 = tfidf1._2.asInstanceOf[SV]
+        val bsv1 = new BSV[Double](sv1.indices, sv1.values, sv1.size)
+        val sv2 = tfidf2._2.asInstanceOf[SV]
+        val bsv2 = new BSV[Double](sv2.indices, sv2.values, sv2.size)
+        // calculator the cosin simplicity
+        bsv1.dot(bsv2).asInstanceOf[Double] / (norm(bsv1) * norm(bsv2))
+      }
+      (id1, (id2, cosSim))
+    }.filter { case (id1, (id2, cosSim)) => cosSim > 0.0 } // 相似度低的过滤
+      .map { case (id1, (id2, cosSim)) => (id1, Seq((id2, cosSim))) }
+      .reduceByKey((s1, s2) => s1 ++ s2)
+      .map { case (id1, seq) => ( id1, seq.sortWith((seq1, seq2) => seq1._2 > seq2._2).take(10).map(_._1).mkString("#"))}
+
+     similarity.foreachPartition{
+       x=> {
+         val conf = HBaseConfiguration.create()
+         conf.set("hbase.zookeeper.property.clientPort", HbaseConfig.hbase_zookeeper_property_clientPort)
+         conf.set("hbase.zookeeper.quorum",HbaseConfig.hbase_zookeeper_quorum )
+         conf.set("hbase.master", HbaseConfig.hbase_master)
+         val cookieTbl = new HTable(conf, TableName.valueOf(HbaseConfig.goodstbl))
+         cookieTbl.setAutoFlush(false, false)
+         cookieTbl.setWriteBufferSize(3*1024*1024)
+         x.foreach { y => {
+           val p = new Put(Bytes.toBytes(y._1.toString))
+           p.addColumn(HbaseConfig.similar_goods_familay.getBytes, HbaseConfig.similar_goods_property_based_qualifier.getBytes,
+             Bytes.toBytes(y._2.toString))
+           cookieTbl.put(p)
+         }
+         }
+         cookieTbl.flushCommits()
+       }
+     }
+     sc.stop()
+  }
+
+  /**
+    * 计算商品的属性和价格的 TF
+    * @param array 属性集
+    * @param price 价格
+    * @param priceArray 价格的等级
+    */
+  def calculatorTF(array: Traversable[String], price: String, priceArray: List[Double]): Vector ={
+    // 计算商品属性的 TF
+    val termFrequency = mutable.HashMap.empty[Int, Double]
+    if (price.equalsIgnoreCase("NULL"))
+      termFrequency(featuresNum) = (priceArray.size + 1) / 2
+    else {
+      var i = priceArray.size
+      while (i > 0 && termFrequency.isEmpty) {
+        // 0%-20%: 1, 20%-40%: 2, 40%-60%: 3, 60%-80%: 4, 80%- : 5
+        if (price.toDouble >= priceArray(i - 1)) termFrequency(featuresNum) = i
+        i -= 1
+      }
+    }
+    array.foreach { attr =>
+      val index = indexOf(attr)
+      termFrequency.put(index, termFrequency.getOrElse(index, 0.0) + 1.0)
+    }
+    Vectors.sparse(featuresNum + 1, termFrequency.toSeq)
+  }
+
+  def indexOf(term: Any): Int = nonNegativeMod(term.##, featuresNum)
+
+  def nonNegativeMod(x: Int, mod: Int): Int = {
+    val rawMod = x % mod
+    rawMod + (if (rawMod < 0) mod else 0)
+  }
+
+}
+
+object GoodsSimilarity extends Serializable {
+
+  def main(args: Array[String]) = {
+    execute(args)
+  }
+
+  def execute(args: Array[String]) = {
+    val goodsSimilarity = new GoodsSimilarity
+    goodsSimilarity.run(args)
+  }
+}
