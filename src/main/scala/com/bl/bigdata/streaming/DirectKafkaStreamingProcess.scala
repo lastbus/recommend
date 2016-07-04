@@ -12,6 +12,7 @@ import org.apache.hadoop.hbase.client.Get
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.kafka.clients.consumer.{KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
+import org.apache.log4j.{LogManager, Level}
 import org.apache.spark.streaming.dstream.InputDStream
 import org.apache.spark.streaming.kafka.{HasOffsetRanges, KafkaUtils, OffsetRange}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
@@ -28,13 +29,23 @@ object DirectKafkaStreamingProcess extends StreamingLogger {
 
 
   def main(args: Array[String]) {
+
     logger.debug("==========  program start!  ==========")
+    LogManager.getRootLogger.setLevel(Level.WARN)
 
     val streamingProperties = new Properties()
-    streamingProperties.load(new InputStreamReader(new FileInputStream("streaming.properties")))
+    val classLoader = DirectKafkaStreamingProcess.getClass.getClassLoader
+    val in = classLoader.getResourceAsStream("streaming.properties")
+    if (in != null) streamingProperties.load(in)
+    else {println("no streaming.properties found!"); System.exit(-1)}
+    if (streamingProperties.size() == 0) {
+      println("streaming.properties is empty.")
+      sys.exit(-1)
+    }
 
     val kafkaProps = new Properties()
-    kafkaProps.load(new InputStreamReader(new FileInputStream("kafka.properties")))
+    val in2 = classLoader.getResourceAsStream("kafka.properties")
+    if (in2 != null) kafkaProps.load(in2) else {println("no kafka.properties found!"); System.exit(-1)}
 
     val kafkaParams = mutable.Map[String, String]()
     val keys = kafkaProps.keySet().iterator()
@@ -42,17 +53,16 @@ object DirectKafkaStreamingProcess extends StreamingLogger {
       val key = keys.next().toString
       kafkaParams(key) = kafkaProps.getProperty(key)
     }
-//    val topic = streamingProperties.getProperty("kafka.topic.subscribe").split(",").toSet
-//    val sc = new SparkContext(new SparkConf())
-//    val ssc = new StreamingContext(sc, Seconds(streamingProperties.getProperty("streaming.batch.interval").toInt))
-//    val consumer = new KafkaConsumer[String, String](kafkaParams) with Serializable
-//    consumer.subscribe(topic.toList)
-//    val ssc = StreamingContext.getOrCreate(checkpointPath, () => createStreamingContext(streamingProperties, checkpointPath, kafkaParams.toMap))
+    if (kafkaParams.size == 0) {
+      println("no kafka properties found in kafka.properties")
+      sys.exit(-1)
+    }
     val ssc = new StreamingContext(new SparkConf().setAppName("kafka-streaming-direct"), Seconds(2))
     val topic = streamingProperties.getProperty("kafka.topic.subscribe").split(",").toSet
     val dStream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams.toMap, topic)
 
     var offsetRanges = Array[OffsetRange]()
+
     dStream.transform { rdd =>
       offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
       rdd
@@ -63,7 +73,6 @@ object DirectKafkaStreamingProcess extends StreamingLogger {
         rdd.foreachPartition
         { partition =>
             val conn = HBaseConnectionPool.connection
-            // val conn = ConnectionFactory.createConnection(conf)
             val table = conn.getTable(TableName.valueOf("kafka-streaming-test"))
             val jedis = RedisClient.pool.getResource
             partition.foreach
@@ -74,36 +83,40 @@ object DirectKafkaStreamingProcess extends StreamingLogger {
                 val cookie = json.getString("cookieId")
                 val eventDate = json.getString("eventDate")
                 val goodsId = json.getString("goodsId")
-                val get = new Get(Bytes.toBytes(cookie))
-                if (table.exists(get))
-                {
-    //              val memberID = jedis.get(cookie)
-//                  val value = table.get(get).getValue(Bytes.toBytes("test"), Bytes.toBytes("cookie"))
-                  val memberID = new String(table.get(get).getValue(Bytes.toBytes("test"), Bytes.toBytes("cookie")))
-                  jedis.hmset("last_view_" + memberID, Map(goodsId -> eventDate))
-                  logger.debug(s"save to redis key: last_view_$memberID")
+
+                if (behaviorType.equals("view")) {
+                  val get = new Get(Bytes.toBytes(cookie))
+                  val result = table.get(get)
+                  if (!result.isEmpty)
+                  {
+                    val memberID = new String(result.getValue(Bytes.toBytes("test"), Bytes.toBytes("cookie")))
+                    jedis.hmset("last_view_" + memberID, Map(goodsId -> eventDate))
+                    logger.debug(s"save to redis key: last_view_$memberID")
+                  } else {
+                    logger.debug(s"cookie: $cookie not found in hbase")
+                  }
                 } else {
-                  logger.debug(s"cookie: $cookie not found in hbase")
+                  logger.info(item)
                 }
+
               } catch {
                 case e: Exception => logger.debug(item)
               }
 
             }
-            // 处理完一定要释放连接，否则连接池很快就会被耗尽
+            table.close()
             jedis.close()
       }
-
 
     }
 
 
-
     ssc.start()
     ssc.awaitTermination()
-    logger.info("===============   end  =================")
+    logger.info("===============   graceful end  =================")
 
   }
+
 
   def createStreamingContext(conf: Properties, checkpointPath: String, kafkaConf: Map[String, String]): StreamingContext =
   {

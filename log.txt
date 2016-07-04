@@ -1,9 +1,0 @@
-
-D:\IdeaProjects15\recommend-mk>echo "Hello World!" 
-"Hello World!"
-
-D:\IdeaProjects15\recommend-mk>pause
-请按任意键继续. . . 
-
-D:\IdeaProjects15\recommend-mk>echo "end" 
-"end"

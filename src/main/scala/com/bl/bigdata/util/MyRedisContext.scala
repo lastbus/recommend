@@ -4,6 +4,7 @@ import com.redislabs.provider.redis.{RedisConfig, RedisContext, RedisEndpoint}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import redis.clients.jedis.{JedisPool, JedisPoolConfig}
+import scala.collection.JavaConversions._
 
 import scala.collection.JavaConversions._
 

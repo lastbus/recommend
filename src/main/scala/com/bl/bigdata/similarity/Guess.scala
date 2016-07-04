@@ -1,11 +1,13 @@
 package com.bl.bigdata.similarity
 
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
+import org.apache.commons.cli.{BasicParser, HelpFormatter, Option, Options}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry}
@@ -15,6 +17,7 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{Accumulator, SparkContext}
 
 import scala.collection.JavaConversions._
+import scala.collection.mutable
 
 /**
  *
@@ -25,8 +28,8 @@ import scala.collection.JavaConversions._
   */
 class Guess extends Tool {
 
-
   override def run(args: Array[String]): Unit = {
+    GuessCommandParser.parser(args)
     logger.info("ALS 模型开始计算......")
     val sc = SparkFactory.getSparkContext("ALSModel")
     trainModel(sc)
@@ -35,9 +38,10 @@ class Guess extends Tool {
 
   def trainModel(sc: SparkContext)  = {
     /** 中间结果的保存路径 */
-    val cookiePath = ConfigurationBL.get("als.cookie.path")
-    val productPath = ConfigurationBL.get("als.product.path")
-    val modelPath = ConfigurationBL.get("als.model.path")
+      val tempPath = GuessConf.optionMap(GuessConf.tempPath)
+      val cookiePath = tempPath + "/" + GuessConf.optionMap(GuessConf.cookieDir)
+      val productPath = tempPath + "/" + GuessConf.optionMap(GuessConf.productDir)
+      val modelPath = tempPath + "/" + GuessConf.optionMap(GuessConf.modelDir)
 
     val start = getStartTime
     val sql = s"select cookie_id, behavior_type, goods_sid, dt " +
@@ -64,14 +68,13 @@ class Guess extends Tool {
 
     Message.addMessage(s"There are $cookieNum  users , and $productNum  products.")
 
-    /** 有个问题，从 hive 读入的数据是大量的小文件，有好几千，需要把这些小文件合并成大文件，那么合并的依据是什么？
-      * 初步做法是： executor.instances * executor.cores 。
-      *
-      * */
+    /** 从 hive 读入的数据是大量的小文件，有好几千，需要把这些小文件合并成大文件，那么合并的依据是什么？
+      * 初步做法是： executor.instances * executor.cores
+      */
     val fs = FileSystem.get(new Configuration())
-    if ( fs.exists(new Path(cookiePath))) fs.delete(new Path(cookiePath), true)
+    if ( fs.exists(new Path(cookiePath)) && GuessConf.optionMap(GuessConf.delete).equalsIgnoreCase("true")) fs.delete(new Path(cookiePath), true)
     cookieIndex.map( s => s._1 + "\t" + s._2 ).saveAsTextFile(cookiePath)
-    if ( fs.exists(new Path(productPath)) ) fs.delete(new Path(productPath), true)
+    if ( fs.exists(new Path(productPath)) && GuessConf.optionMap(GuessConf.delete).equalsIgnoreCase("true")) fs.delete(new Path(productPath), true)
     productIndex.map( s => s._1 + "\t" + s._2).saveAsTextFile(productPath)
     Message.addMessage(s"save cookie and product to path:\t $cookiePath \t\t$productPath")
 
@@ -86,9 +89,11 @@ class Guess extends Tool {
     trainRDD.persist(StorageLevel.MEMORY_AND_DISK_SER)
     Message.addMessage("trainRDD count:\t" + trainRDD.count())
 
-    val rank = ConfigurationBL.get("als.rank", "10").toInt
-    val iterator = ConfigurationBL.get("als.iterator", "10").toInt
-    val model = ALS.train(trainRDD, rank, iterator, 0.01)
+//    val rank = ConfigurationBL.get("als.rank", "10").toInt
+//    val iterator = ConfigurationBL.get("als.iterator", "10").toInt
+    val model = ALS.train(trainRDD, GuessConf.optionMap(GuessConf.rank).toInt, GuessConf.optionMap(GuessConf.iterator).toInt,
+      GuessConf.optionMap(GuessConf.lambda).toDouble, GuessConf.optionMap(GuessConf.numBlocks).toInt)
+//    val model = ALS.train(trainRDD, rank, iterator)
     // 计算模型的均方差
     val usersProducts = trainRDD.map { case Rating(user, product, rating) => (user, product) }
     val predict = model.predict(usersProducts).map{ case Rating(user, product, rate) => ((user, product), rate)}
@@ -99,7 +104,7 @@ class Guess extends Tool {
                                       err * err}.mean()
 
     Message.addMessage(s"ALS Mean Squared Error =\t$MSE \n")
-    if (fs.exists(new Path(modelPath))) fs.delete(new Path(modelPath), true)
+    if ( fs.exists(new Path(modelPath)) && GuessConf.optionMap(GuessConf.delete).equalsIgnoreCase("true") ) fs.delete(new Path(modelPath), true)
     fs.close()
     model.save(sc, modelPath)
     Message.addMessage(s"save als model to: \t$modelPath\n")
@@ -112,6 +117,7 @@ class Guess extends Tool {
     strategy match {
       case "matrix" => sparkMatrix(cookieIndex, productIndex, model)
       case "cartestian" => cartesian(cookieIndex, productIndex, model)
+      case "recommend" => recommend(cookieIndex, productIndex, model)
       case _ => throw new Exception("please input [matrix] or [cartestian]")
     }
 
@@ -119,18 +125,13 @@ class Guess extends Tool {
 
   /** 通过 spark 矩阵去计算 user-item 矩阵，数据量一大就会报错。*/
   def sparkMatrix(cookieIndex: RDD[(String, Long)], productIndex: RDD[(String, Long)], model: MatrixFactorizationModel): Unit = {
-    // ============= 以下为计算user-item矩阵，其实可以考虑用笛卡尔积计算而不是用spark的矩阵，以后再说吧。=============
     val takeNum = ConfigurationBL.get("als.take.num", "30").toInt
     val initValue = new Array[(Long, Double)](takeNum).map(s => (-1L, 0.0))
     val aggregate = (init: Array[(Long, Double)], toBeAdd: (Long, Double)) => insertSort2(init, toBeAdd)
-    val combine = (op1: Array[(Long, Double)], op2: Array[(Long, Double)]) => {
-      for (v <- op2) insertSort2(op1, v)
-      op1
-    }
-    val user = model.userFeatures.map { case (userIndex, rating) =>
-      for (r <- 0 until rating.length - 1) yield MatrixEntry(userIndex, r, rating(r))
-    }
-      .flatMap(s => s)
+    val combine = (op1: Array[(Long, Double)], op2: Array[(Long, Double)]) => {{for (v <- op2) insertSort2(op1, v);op1}}
+
+    val user = model.userFeatures.map { case (userIndex, rating) => for (r <- 0 until rating.length - 1) yield MatrixEntry(userIndex, r, rating(r))}.flatMap(s => s)
+
     val userBlockMatrix = new CoordinateMatrix(user).toBlockMatrix()
     //    userBlockMatrix.persist(StorageLevel.MEMORY_AND_DISK)  //这个矩阵不大，其实不需要缓存
     val product = model.productFeatures.map { case (productIndex0, rating) =>
@@ -138,12 +139,6 @@ class Guess extends Tool {
     }
       .flatMap(s => s)
     val productBlockMatrix = new CoordinateMatrix(product).transpose().toBlockMatrix()
-    //    productBlockMatrix.persist(StorageLevel.MEMORY_AND_DISK)  //这个矩阵不大，其实不需要缓存,缓存user-item矩阵就好了
-
-    // 原先计算 user-item 矩阵的结果直接就进行下一步计算，这样spark就看不到 user-item 的引用，而这个矩阵是很大的，
-    // 但是spark没有它的引用，所以每一次需要它都会从头开始计算它，所以就很浪费时间了。现在的做法是把这个大大的矩阵
-    // 的引用保存起来，而不是不保存引用直接进行下一步计算。。。这spark，把一个复杂的计算 拆分成几次较小的执行，效率
-    // 会提高很多。
     val cookieProductMatrix = userBlockMatrix.multiply(productBlockMatrix).toCoordinateMatrix().entries
     //    cookieProductMatrix.persist(StorageLevel.MEMORY_AND_DISK)
     val aggregateUserItemMatrix = cookieProductMatrix.map { case MatrixEntry(user0, product0, rating) => (user0, (product0, rating)) }
@@ -163,9 +158,6 @@ class Guess extends Tool {
                                       .join(replaceProduct)
                                       .map { case (userIndex, (user0, (product0, rating))) => (user0, Seq((product0, rating))) }
                                       .reduceByKey(_ ++ _).map(s => (s._1, s._2.map(s0 => (s0._1, s0._2.toString)).toMap))
-
-    //    val userItemTupleString = replaceItemIndex.mapValues(p => p.mkString("#"))
-    //    userItemTupleString.checkpoint() //把它checkpoint 起来，及时导入redis失败，那么也可以重新导入？？？
 
     /**
     //------------------------------------------------------------
@@ -192,37 +184,8 @@ class Guess extends Tool {
     //    saveToRedis(userItemTupleString, count)
     saveMapToRedis(replaceItemIndex, count)
     Message.addMessage(s"insert into redis :  ${count.value}")
-  }
 
-  def getMemory(memory: String): Int = {
-    if ( memory.endsWith("g") ) {
-      memory.substring(0, memory.indexOf("g")).toInt
-    } else if (memory.endsWith("G")) {
-      memory.substring(0, memory.indexOf("G")).toInt
-    } else if (memory.endsWith("m")) {
-      memory.substring(0, memory.indexOf("m")).toInt
-    } else if (memory.endsWith("M")) {
-      memory.substring(0, memory.indexOf("M")).toInt
-    } else {
-      throw new Exception("error memory munber!")
-    }
-  }
 
-  def getAllModel(model: MatrixFactorizationModel): RDD[(Long, String)] = {
-
-    val initValue = new Array[(Long, Double)](20).map(s =>(-1L,0.0))
-    val aggregate = (init: Array[(Long, Double)], toBeAdd: (Long, Double)) => insertSort2(init, toBeAdd)
-    val combine = (op1: Array[(Long, Double)], op2: Array[(Long, Double)]) => {for (v <- op2) insertSort2(op1, v); op1}
-
-    val user = model.userFeatures.map{ case (userIndex, rating) =>
-      for (r <- 0 until rating.length - 1) yield MatrixEntry(userIndex, r, rating(r)) }.flatMap(s => s)
-    val userBlockMatrix = new CoordinateMatrix(user).toBlockMatrix()
-    userBlockMatrix.persist(StorageLevel.DISK_ONLY_2)
-
-    val product = model.productFeatures.map{ case (productIndex, rating) =>
-      for (p <- 0 until rating.length -1) yield MatrixEntry(productIndex, p, rating(p))}.flatMap(s=>s)
-    val productBlockMatrix = new CoordinateMatrix(product).transpose().toBlockMatrix()
-    productBlockMatrix.persist(StorageLevel.DISK_ONLY_2)
 
 
     val userProduct = userBlockMatrix.multiply(productBlockMatrix)
@@ -234,6 +197,7 @@ class Guess extends Tool {
   }
 
   /** 采用笛卡尔积方式计算 user-item 矩阵*/
+
   def cartesian(cookieIndex: RDD[(String, Long)], productIndex: RDD[(String, Long)], model: MatrixFactorizationModel): Unit = {
 //    val cookiePath = ConfigurationBL.get("als.cookie.path")
 //    val productPath = ConfigurationBL.get("als.product.path")
@@ -243,16 +207,14 @@ class Guess extends Tool {
 
 
     val indexUser = cookieIndex.map(s => (s._2.toInt, s._1))
-    val user = model.userFeatures.join(indexUser).map{ case (index, (ratings, cookie)) => (cookie, ratings)}
 
+    val user = model.userFeatures.join(indexUser).map{ case (index, (ratings, cookie)) => (cookie, ratings)}
     val indexProd = productIndex.map(s => (s._2.toInt, s._1))
     val item = model.productFeatures.join(indexProd).map { case  (index, (ratings, itemNo)) => (itemNo, ratings)}
-
     val takeNum = ConfigurationBL.get("als.take.num", "30").toInt
     val initValue = new Array[(String, Double)](takeNum).map(s =>("", -1.0))
     val aggregate = (init: Array[(String, Double)], toBeAdd: (String, Double)) => insertSortCartesian(init, toBeAdd)
     val combine = (op1: Array[(String, Double)], op2: Array[(String, Double)]) => { for (v <- op2) insertSortCartesian(op1, v); op1 }
-
     val userItem= user.cartesian(item)
     userItem.persist(StorageLevel.MEMORY_AND_DISK)
 //    userItem.sparkContext.setCheckpointDir("/user/tmp/spark/checkpoint")
@@ -266,6 +228,46 @@ class Guess extends Tool {
     saveMapToRedis(result, count)
     Message.addMessage(s"als model count:\t$count")
 
+  }
+
+
+
+  /** 将所有用户聚集到driver，然后一个一个推荐。*/
+  def recommend(cookieIndex: RDD[(String, Long)], productIndex: RDD[(String, Long)], model: MatrixFactorizationModel): Unit = {
+    val num = ConfigurationBL.get("als.take.num", "30").toInt
+    // 商品编号的 map
+    val product = productIndex.map(s => (s._2.toInt, s._1)).collectAsMap()
+    val indexUser = cookieIndex.map(s => (s._2.toInt, s._1))
+
+//    model.userFeatures.cache()
+//    model.productFeatures.cache()
+    // 将所有用户 collect 到 driver 节点
+    val users = model.userFeatures.map(_._1).collect()
+
+    val result = users.map { case user => (user, model.recommendProducts(user, num)) }
+      .map { case (user, products) => (user, products.map(p => (product(p.product), p.rating.toString))) }
+    val resultRDD = SparkFactory.getSparkContext.parallelize(result).join(indexUser).map { case (index, (p, cookie)) => (cookie, p.toMap)}
+    val count = SparkFactory.getSparkContext.accumulator(0)
+    saveMapToRedis(resultRDD, count)
+    Message.addMessage(s"als model count:\t$count")
+
+  }
+
+
+
+
+  def getMemory(memory: String): Int = {
+    if ( memory.endsWith("g") ) {
+      memory.substring(0, memory.indexOf("g")).toInt
+    } else if (memory.endsWith("G")) {
+      memory.substring(0, memory.indexOf("G")).toInt
+    } else if (memory.endsWith("m")) {
+      memory.substring(0, memory.indexOf("m")).toInt
+    } else if (memory.endsWith("M")) {
+      memory.substring(0, memory.indexOf("M")).toInt
+    } else {
+      throw new Exception("error memory munber!")
+    }
   }
 
   def calculate(array1: Array[Double], array2: Array[Double]): Double ={
@@ -337,7 +339,7 @@ class Guess extends Tool {
   }
 
   def getStartTime: String = {
-    val limit = ConfigurationBL.get("als.day.before.today", "90").toInt
+    val limit = GuessConf.optionMap(GuessConf.days).toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date = new Date
     sdf.format(new Date(date.getTime - 24000L * 3600 * limit))
@@ -379,4 +381,139 @@ object Guess {
     guess.run(args)
 
   }
+}
+
+object GuessCommandParser {
+  val options = new Options
+
+  val help = new Option("h", "help", false, "print help information.")
+  val tempPath = new Option("t", "temp.path", true, "temp path")
+  val cookie = new Option("c", "cookie", true, "cookie temp dirname")
+  val product = new Option("p", "product", true, "product temp dirname")
+  val model = new Option("m", "model", true, "als model temp dirname.")
+  val numBlocks = new Option("nb", "als.blocks", true, "als blocks number")
+  val rank = new Option("r", "als.rank", true, "als rank")
+  val iterator = new Option("it", "als.iterator", true, "als iterator")
+  val lambda = new Option("l", "als.lambda", true, "als.lambda")
+  val implicitPrefs = new Option("p", "als.implicitPrefs", true, "als implicitPrefs")
+  val alpha = new Option("a", "alpha", true, "als alpha")
+  val delete = new Option("del", "delete", true, "delete existing tmp file")
+  val days = new Option("nd", "days number", true, "number of days")
+
+  options.addOption(help)
+  options.addOption(tempPath)
+  options.addOption(cookie)
+  options.addOption(product)
+  options.addOption(model)
+  options.addOption(numBlocks)
+  options.addOption(rank)
+  options.addOption(iterator)
+  options.addOption(lambda)
+  options.addOption(implicitPrefs)
+  options.addOption(alpha)
+  options.addOption(delete)
+  options.addOption(days)
+
+  val basicParser = new BasicParser
+
+  def main(args: Array[String]) {
+    parser(args)
+  }
+
+  def parser(args: Array[String]): Unit = {
+    val commandLine = basicParser.parse(options, args)
+
+    if (commandLine.hasOption("help")){
+      printHelper()
+      sys.exit(-1)
+    }
+
+    if (commandLine.hasOption(GuessConf.tempPath)) {
+      GuessConf.optionMap(GuessConf.tempPath) = commandLine.getOptionValue(GuessConf.tempPath)
+    }
+    if (commandLine.hasOption(GuessConf.cookieDir)) {
+      GuessConf.optionMap(GuessConf.cookieDir) = commandLine.getOptionValue(GuessConf.cookieDir)
+    }
+    if (commandLine.hasOption(GuessConf.productDir)) {
+      GuessConf.optionMap(GuessConf.productDir) = commandLine.getOptionValue(GuessConf.productDir)
+    }
+    if (commandLine.hasOption(GuessConf.modelDir)) {
+      GuessConf.optionMap(GuessConf.modelDir) = commandLine.getOptionValue(GuessConf.modelDir)
+    }
+    if (commandLine.hasOption(GuessConf.numBlocks)) {
+      GuessConf.optionMap(GuessConf.numBlocks) = commandLine.getOptionValue(GuessConf.numBlocks)
+    }
+    if (commandLine.hasOption(GuessConf.rank)) {
+      GuessConf.optionMap(GuessConf.rank) = commandLine.getOptionValue(GuessConf.rank)
+    }
+    if (commandLine.hasOption(GuessConf.iterator)) {
+      GuessConf.optionMap(GuessConf.iterator) = commandLine.getOptionValue(GuessConf.iterator)
+    }
+    if (commandLine.hasOption(GuessConf.lambda)) {
+      GuessConf.optionMap(GuessConf.lambda) = commandLine.getOptionValue(GuessConf.lambda)
+    }
+    if (commandLine.hasOption(GuessConf.implicitPrefs)) {
+      GuessConf.optionMap(GuessConf.implicitPrefs) = commandLine.getOptionValue(GuessConf.implicitPrefs)
+    }
+    if (commandLine.hasOption(GuessConf.alpha)) {
+      GuessConf.optionMap(GuessConf.alpha) = commandLine.getOptionValue(GuessConf.alpha)
+    }
+    if (commandLine.hasOption(GuessConf.delete)) {
+      val del = GuessConf.optionMap(GuessConf.delete)
+      if (!(del.equalsIgnoreCase("true") | del.equalsIgnoreCase("false"))){
+        System.err.println("not valid parameter: true or false")
+        sys.exit(-1)
+      }
+      GuessConf.optionMap(GuessConf.delete) = del
+    }
+    if (commandLine.hasOption(GuessConf.days)) {
+      val d = commandLine.getOptionValue(GuessConf.days)
+      if (!"[1-9]+[0-9]*".r.pattern.matcher(d).matches()) {
+        System.err.println(s"not valid number. ${d}")
+        sys.exit(-1)
+      }
+      GuessConf.optionMap(GuessConf.days) = d
+    }
+  }
+
+  def printHelper() = {
+    val helpFormatter = new HelpFormatter
+    helpFormatter.printHelp("als", options)
+  }
+
+}
+
+object GuessConf {
+
+  val tempPath = "temp.path"
+  val cookieDir = "cookie.path"
+  val productDir = "product.path"
+  val modelDir = "model.path"
+
+  // als parameters
+  val numBlocks = "als.blocks"
+  val rank = "als.rank"
+  val iterator = "als.iterator"
+  val lambda = "als.lambda"
+  val implicitPrefs = "als.implicitPrefs"
+  val alpha = "als.alpha"
+
+  val delete = "delete"
+  val days = "days"
+
+  val optionMap = mutable.Map(tempPath -> "tmp/spark/als/",
+                              cookieDir -> "cookie",
+                              productDir -> "product",
+                              modelDir -> "model",
+                              delete -> "true",
+                              days -> "90",
+
+    numBlocks -> "-1",
+    rank -> "10",
+    iterator -> "10",
+    lambda -> "0.01",
+    implicitPrefs -> "",
+    alpha -> ""
+  )
+
 }

@@ -6,8 +6,11 @@ import java.util.Date
 import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
+import org.apache.commons.cli.{BasicParser, HelpFormatter, Option, Options}
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
+
+import scala.collection.mutable
 
 /**
   * 计算用户浏览的某类商品之间的相似度
@@ -26,16 +29,18 @@ class BrowserGoodsSimilarity extends Tool {
   }
 
   override def run(args: Array[String]): Unit = {
+    BrowserGoodsCommandParser.parse(args)
     logger.info("看了又看开始计算.....")
     Message.addMessage("看了又看:\n")
-    val output = ConfigurationBL.get("recmd.output")
-    val prefix = ConfigurationBL.get("browser.again")
+    val output = BrowserGoodsConf.optionMap(BrowserGoodsConf.output)
+    val prefix = BrowserGoodsConf.optionMap(BrowserGoodsConf.prefix)
     val redis = output.contains("redis")
     val sc = SparkFactory.getSparkContext("看了又看")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
     // 根据最近多少天的浏览记录，默认 90天
-    val limit = ConfigurationBL.get("day.before.today", "90").toInt
+    val limit = BrowserGoodsConf.optionMap(BrowserGoodsConf.day).toInt
+    val behaviorType = BrowserGoodsConf.optionMap(BrowserGoodsConf.behaviorType)
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date0 = new Date
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
@@ -44,7 +49,7 @@ class BrowserGoodsSimilarity extends Tool {
 
     val rawRdd = ReadData.readHive(sc, sql).map{ case Array(cookie, category, date, behaviorId, goodsId) =>
                                               (cookie, category, date.substring(0, date.indexOf(" ")), behaviorId, goodsId) }
-                                            .filter(_._4 == "1000")
+                                            .filter(_._4 == behaviorType)
                                             .map { case (cookie, category, date, behaviorId, goodsId) => ((cookie, category, date), goodsId)}
                                             .filter(v => {
                                               if (v._1._2.trim.length == 0) false
@@ -68,7 +73,7 @@ class BrowserGoodsSimilarity extends Tool {
 
     // 保存到 redis 中
     if (redis) {
-      val redisType = ConfigurationBL.get("redis.type")
+      val redisType = BrowserGoodsConf.optionMap(BrowserGoodsConf.redisType)
 //      saveToRedis(good1Good2Similarity, accumulator2, redisType)
       RedisClient.sparkKVToRedis(good1Good2Similarity, accumulator2, redisType)
       Message.addMessage(s"\t\t$prefix*: $accumulator\n")
@@ -110,6 +115,7 @@ class BrowserGoodsSimilarity extends Tool {
 object BrowserGoodsSimilarity {
 
   def main(args: Array[String]) {
+
         execute(args)
   }
 
@@ -117,4 +123,107 @@ object BrowserGoodsSimilarity {
     val goodsSimilarity = new BrowserGoodsSimilarity with ToolRunner
     goodsSimilarity.run(args)
   }
+}
+
+object BrowserGoodsCommandParser {
+  val options = new Options
+
+  val help = new Option("h", "help", false, "print help information.")
+  val input = new Option("i", "input", true, "input datasource type.")
+  input.setArgName("datasource")
+  val output = new Option("o", "output", true, "output data.")
+  output.setArgName("output")
+  val day = new Option("n", "number of days", true, "number of days before now.")
+  day.setArgName("days")
+  val behaviorType = new Option("t", "behavior.type", true, "behavior type")
+  behaviorType.setArgName("behaviorCode")
+  val redisType = new Option("r", "redis.type", true, "redis type: standalone, sentinel or cluster")
+  redisType.setArgName("redisType")
+
+  options.addOption(help)
+  options.addOption(input)
+  options.addOption(output)
+  options.addOption(day)
+  options.addOption(behaviorType)
+  options.addOption(redisType)
+
+  val commandParser = new BasicParser
+
+  def parse(args: Array[String]): Unit = {
+
+     val commandLine = try {
+      commandParser.parse(options, args)
+    } catch {
+      case e: Exception =>
+        println(e.getMessage)
+        printHelper()
+        sys.exit(-1)
+    }
+
+    if (commandLine.hasOption("help")) {
+      printHelper()
+      sys.exit(-1)
+    }
+
+    if (commandLine.hasOption(BrowserGoodsConf.prefix)){
+      BrowserGoodsConf.optionMap(BrowserGoodsConf.prefix) = commandLine.getOptionValue(BrowserGoodsConf.prefix)
+    }
+    if (commandLine.hasOption(BrowserGoodsConf.input)){
+      val input = commandLine.getOptionValue(BrowserGoodsConf.input)
+      if (input != "sql") {
+        System.err.println(s"cannot be $input, only support sql just now.")
+        printHelper()
+        sys.exit(-1)
+      }
+      BrowserGoodsConf.optionMap(BrowserGoodsConf.input) = commandLine.getOptionValue(input)
+    }
+    if (commandLine.hasOption(BrowserGoodsConf.output)){
+      val output = commandLine.getOptionValue(BrowserGoodsConf.output)
+      if (output != "redis") {
+        System.err.println(s"cannot be $output, only support redis just now.")
+        printHelper()
+        sys.exit(-1)
+      }
+      BrowserGoodsConf.optionMap(BrowserGoodsConf.output) = commandLine.getOptionValue(BrowserGoodsConf.output)
+    }
+    if (commandLine.hasOption(BrowserGoodsConf.day)){
+      val n = commandLine.getOptionValue(BrowserGoodsConf.day)
+      if (!"[1-9]+[0-9]*".r.pattern.matcher(n).matches()) {
+        System.err.println("not valid number.")
+        sys.exit(-1)
+      }
+      BrowserGoodsConf.optionMap(BrowserGoodsConf.day) = commandLine.getOptionValue(BrowserGoodsConf.day)
+    }
+    if (commandLine.hasOption(BrowserGoodsConf.behaviorType)){
+      BrowserGoodsConf.optionMap(BrowserGoodsConf.behaviorType) = commandLine.getOptionValue(BrowserGoodsConf.behaviorType)
+    }
+    if (commandLine.hasOption(BrowserGoodsConf.redisType)){
+      BrowserGoodsConf.optionMap(BrowserGoodsConf.redisType) = commandLine.getOptionValue(BrowserGoodsConf.redisType)
+    }
+
+  }
+
+  def printHelper(): Unit = {
+    val helperFormatter = new HelpFormatter
+    helperFormatter.printHelp("BrowserGoodsSimilarity", options)
+  }
+}
+
+object BrowserGoodsConf {
+
+  val prefix = "prefix"
+  val output = "output"
+  val day = "day"
+  val behaviorType = "behavior.type"
+  val input = "sql"
+  val redisType = "redis.type"
+
+
+  val optionMap = mutable.Map(
+                  prefix -> "rcmd_view_",
+                  input -> "sql",
+                  behaviorType -> "1000",
+                  output -> "redis",
+                  redisType -> "cluster",
+                  day -> "90")
 }

@@ -10,6 +10,7 @@ import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 import redis.clients.jedis.{HostAndPort, JedisCluster, JedisPool}
 
+
 /**
   * Created by MK33 on 2016/4/7.
   */
@@ -62,7 +63,7 @@ object RedisClient extends Serializable with Logging with Redis {
 
   val jedisHook = new Thread {
     override def run() = {
-      logger.info("==========  Execute hook thread: " + this  + "  =================")
+      logger.info("==========  shutdown jedis  " + this  + "  =================")
       if (pool != null) pool.destroy()
     }
   }

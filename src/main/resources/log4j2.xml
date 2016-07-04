@@ -2,10 +2,19 @@
 <Configuration status="debug">
     <Appenders>
         <Console name="Console" target="SYSTEM_OUT">
-            <PatternLayout pattern="%d{yyyy/MM/dd HH:mm:ss.SSS} %-5level %logger{36}: %msg%n" />
+            <PatternLayout pattern="%d{yy/MM/dd HH:mm:ss.SSS} %-5level %logger{36}:%L\t%msg%n" />
         </Console>
-        <RollingFile name="RollingFile" fileName="/var/lib/recommendation/logs/log"
-                     filePattern="/var/lib/recommendation/logs/history/%d{yyyyMM}.log.gz">
+        <RollingFile name="RollingFile" fileName="/var/tmp/recommend/logs/log"
+                     filePattern="/var/tmp/recommend/logs/history/%d{yyyyMM}.log.gz">
+            <PatternLayout>
+                <Pattern>%d{yyyy/MM/dd HH:mm:ss}\t%5p\t%C:%L\t%m%n</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy modulate="true"/>
+            </Policies>
+        </RollingFile>
+        <RollingFile name="spark.streaming.kafka" fileName="/var/tmp/recommend/logs/log_spark_kafka"
+                     filePattern="/var/tmp/recommend/logs/history/%d{yyyyMM}.log.gz">
             <PatternLayout>
                 <Pattern>%d{yyyy/MM/dd HH:mm:ss}\t%5p\t%C:%L\t%m%n</Pattern>
             </PatternLayout>
@@ -15,11 +24,16 @@
         </RollingFile>
     </Appenders>
     <Loggers>
-        <Root level="debug">
+        <Root name="com.bl.bigdata" level="debug">
             <AppenderRef ref="Console" />
         </Root>
-        <!--<Root level="debug">-->
-            <!--<AppenderRef ref="RollingFile" />-->
-        <!--</Root>-->
+
+        <Logger name="spark.ml" level="debug" additivity="true">
+            <AppenderRef ref="RollingFile" />
+        </Logger>
+
+        <Logger name="spark.streaming.kafka" level="debug" additivity="true">
+            <AppenderRef ref="spark.streaming.kafka" />
+        </Logger>
     </Loggers>
 </Configuration>

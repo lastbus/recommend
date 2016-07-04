@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <class>
+        <full-name>com.bl.bigdata.similarity.BrowserGoodsSimilarity</full-name>
+        <short-name>browser.goods</short-name>
+        <args></args>
+        <description>browser goods similarity</description>
+    </class>
+</configuration>

@@ -33,11 +33,11 @@ class BrowserNotBuy extends Tool {
     val a = ReadData.readHive(sc, sql).map { case Array(cookie, date, behavior, category, goods) =>
                                                   ((cookie, date.substring(0, date.indexOf(" "))), behavior, (category, goods)) }
 
-    val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000")}
-    val buyRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("4000")}
-    val browserNotBuy = browserRDD subtract buyRDD map (s => (s._1._1, Seq(s._3))) reduceByKey ((s1,s2) => s1 ++ s2) map (item =>{
+    val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000") }
+    val buyRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("4000") }
+    val browserNotBuy = browserRDD subtract buyRDD map (s => (s._1._1, Seq((s._3._1, (s._3._2, s._1._2))))) reduceByKey ((s1,s2) => s1 ++ s2) map (item => {
                                     accumulator += 1
-                                    (prefix + item._1, item._2.distinct.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).mkString(",")).mkString("#"))})
+                                    (prefix + item._1, item._2.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).sortWith(_._2 > _._2).map(_._1).distinct.mkString(",")).mkString("#"))})
     browserNotBuy.persist()
     if (redis) {
       val redisType = ConfigurationBL.get("redis.type")
@@ -49,10 +49,10 @@ class BrowserNotBuy extends Tool {
     browserNotBuy.unpersist()
     logger.info("最近两个月浏览未购买商品计算结束。")
   }
+
   /**
     * 将输入的 Array[(category ID, goods ID)] 转换为
     * cateId1:gId1,gId2#cateId2:gid1,gid2#
- *
     * @param items 商品的类别和商品ID数组
     */
   def format(items: Seq[(String, String)]): String = {

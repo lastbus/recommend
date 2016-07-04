@@ -1,7 +1,6 @@
 package bl.testing.mess
 
-import org.apache.spark.{SparkConf, SparkContext}
-import redis.clients.jedis.{JedisPool, JedisPoolConfig, Protocol}
+import redis.clients.jedis.{HostAndPort, JedisCluster}
 
 /**
   * Created by MK33 on 2016/3/21.
@@ -9,26 +8,33 @@ import redis.clients.jedis.{JedisPool, JedisPoolConfig, Protocol}
 object RedisTest {
 
   def main(args: Array[String]): Unit = {
-//    jedis.auth("")
 
-    val sparkConf = new SparkConf().setMaster("local[4]").setAppName("redis")
-    val sc = new SparkContext(sparkConf)
+    val set1 = new java.util.HashSet[HostAndPort]()
+    set1.add(new HostAndPort("s74sit", 7000))
+    set1.add(new HostAndPort("s74sit", 6379))
+    set1.add(new HostAndPort("s75sit", 7000))
+    set1.add(new HostAndPort("s75sit", 6379))
+    set1.add(new HostAndPort("s80sit", 7000))
+    set1.add(new HostAndPort("s80sit", 6379))
 
-    val j = getJedisPool
-    val rawRDD = sc.textFile("D:\\2\\useruser_behavior_raw_data")
-      .map(line => {
-        val jedis = j.getResource
-        jedis.set("user_behavior", line)
-        jedis.set("m", "m")
-        jedis.close()
-      }).count()
-    j.destroy()
-    println(rawRDD)
+    val jedisCluster = new JedisCluster(set1)
+    for (i <- 0 to 10){
+      if (jedisCluster.exists("count0"))
+        jedisCluster.incr("count0")
+      else {
+        jedisCluster.setex("count0", 20, "0")
+        jedisCluster
+      }
+
+    }
+
+    jedisCluster.close()
+
+
+
+
 
   }
 
-  def getJedisPool = {
-    new JedisPool(new JedisPoolConfig, "", 6379, Protocol.DEFAULT_TIMEOUT, "") with Serializable
-  }
 
 }

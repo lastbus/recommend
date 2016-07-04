@@ -52,7 +52,6 @@ class HiveDataRaking extends Tool
                             .map { case (user, ((prod, rating), userIndex)) => (userIndex, prod, rating)}
     if (fs.exists(new Path(tempOutput))) fs.delete(new Path(tempOutput), true)
     training.map(s => s"${s._1},${s._2},${s._3}").saveAsTextFile(tempOutput)
-//    sc.stop()
 
     //  mahout 临时工作目录
     val tempPath = "/tmp/mahout"
@@ -69,10 +68,9 @@ class HiveDataRaking extends Tool
     val args2 = sb.toString().split(" ").filter(_.length > 1)
     job.run(args2)
 
-    val sc2 = SparkFactory.getSparkContext("user-item-rating")
-    val users1 = sc2.textFile(tmp).map (s => {val a = s.split(","); (a(1), a(0))})
+    val users1 = sc.textFile(tmp).map (s => {val a = s.split(","); (a(1), a(0))})
 //    val items2 = sc.textFile("/user/spark/items").map(s => {val a = s.split(","); (a(0), a(1))})
-    val hadoopResult = sc2.textFile(output).map { s => val ab = s.split("\t"); (ab(0), ab(1)) }
+    val hadoopResult = sc.textFile(output).map { s => val ab = s.split("\t"); (ab(0), ab(1)) }
     val itemBasedResult = hadoopResult.join(users1).map { case (userIndex, (prefer, userId)) => (userId, prefer) }.distinct()
 
     val table = ConfigurationBL.get("mahout.table")
@@ -85,7 +83,7 @@ class HiveDataRaking extends Tool
     mrJob.setOutputFormatClass(classOf[TableOutputFormat[Put]])
     mrJob.setOutputKeyClass(classOf[ImmutableBytesWritable])
     mrJob.setOutputValueClass(classOf[Put])
-    val userAccumulator = sc2.accumulator(0)
+    val userAccumulator = sc.accumulator(0)
     itemBasedResult.map { item =>
       val itemList = item._2.substring(1, item._2.length - 2)
       val put = new Put(Bytes.toBytes(item._1))
@@ -95,8 +93,6 @@ class HiveDataRaking extends Tool
     }.saveAsNewAPIHadoopDataset(mrJob.getConfiguration)
 
     Message addMessage s"user number: $userAccumulator"
-
-//    sc2.stop()
 
   }
 

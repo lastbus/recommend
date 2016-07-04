@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <!-- redis -->
+<!-- redis -->
     <property>
         <name>redis.host</name>
         <value>10.201.128.216</value>
