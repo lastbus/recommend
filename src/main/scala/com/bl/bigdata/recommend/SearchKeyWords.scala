@@ -3,6 +3,7 @@ package com.bl.bigdata.recommend
 import java.net.URLDecoder
 
 import com.bl.bigdata.util.{RedisClient, SparkFactory}
+import com.rockymadden.stringmetric.similarity.LevenshteinMetric
 import org.apache.spark.sql.hive.HiveContext
 
 /**
