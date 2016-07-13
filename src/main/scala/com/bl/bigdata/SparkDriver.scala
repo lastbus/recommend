@@ -73,13 +73,14 @@ object SparkDriver {
       SparkDriverCli.printHelper()
       sys.exit(-1)
     }
-    logger.info("\n================   jobs to be executed   ======================")
+    logger.info("\n\n\n================   jobs to be executed   ======================")
     executeMap.foreach { case (k, v) => println("\t\t" + v) }
+    println("\n\n\n")
 //    ConfigurationBL.init()
     executeMap.foreach { case (shortName, job) =>
       try {
         val clazz = Class.forName(job.fullName)
-        clazz.getMethod("run", classOf[Array[String]]).invoke(clazz.newInstance(), job.args.asInstanceOf[Object])
+//        clazz.getMethod("run", classOf[Array[String]]).invoke(clazz.newInstance(), job.args.asInstanceOf[Object])
       } catch {
         case e: Exception =>
           logger.error("error: " + job.shortName + ": " + e.getMessage)

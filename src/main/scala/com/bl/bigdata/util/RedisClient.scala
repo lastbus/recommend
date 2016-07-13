@@ -18,7 +18,10 @@ object RedisClient extends Serializable with Logging with Redis {
 
   val conf = new GenericObjectPoolConfig
   conf.setMaxTotal(100)
-  lazy val pool = new JedisPool(conf, host, port, timeout)
+  lazy val pool = {
+    sys.addShutdownHook(jedisHook.run())
+    new JedisPool(conf, host, port, timeout)
+  }
   lazy val jedisCluster = {
     val properties = new Properties()
     properties.load(this.getClass.getClassLoader.getResourceAsStream("jedis-cluster.properties"))
@@ -33,6 +36,7 @@ object RedisClient extends Serializable with Logging with Redis {
 //    set.add(new HostAndPort("10.201.129.74", 7000))
 //    set.add(new HostAndPort("10.201.129.75", 7000))
 //    set.add(new HostAndPort("10.201.129.80", 7000))
+    sys.addShutdownHook(jedisClusterHook2.run())
     new JedisCluster(sets)
   }
 
@@ -61,22 +65,18 @@ object RedisClient extends Serializable with Logging with Redis {
     })
   }
 
-  val jedisHook = new Thread {
+  val jedisHook: Thread = new Thread {
     override def run() = {
       logger.info("==========  shutdown jedis  " + this  + "  =================")
       if (pool != null) pool.destroy()
     }
   }
 
-  val jedisClusterHook2 = new Thread {
+  val jedisClusterHook2: Thread = new Thread {
     override def run() = {
       logger.info("=======  shutdown jedis cluster connection  ============")
       if (jedisCluster != null) jedisCluster.close()
     }
   }
-
-
-  sys.addShutdownHook(jedisHook.run())
-  sys.addShutdownHook(jedisClusterHook2.run())
 
 }

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <sql>
+        <name>search.category.0</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+                    g.brand_sid, g.pro_sid
+            FROM idmdata.dim_search_category c
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '%s' </value>
+    </sql>
+
+    <sql>
+        <name>search.category.1</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+                    g.brand_sid, g.pro_sid, n.sale_cum_amount, n.index_type
+            FROM idmdata.m_sr_eg_goods_num_amount n
+            INNER JOIN idmdata.dim_search_category c ON c.goods_sid = n.goods_code
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON g.sid = n.goods_code AND g.dt = '%s'
+            where n.cdate = '%s'
+        </value>
+    </sql>
+
+
+
+</configuration>

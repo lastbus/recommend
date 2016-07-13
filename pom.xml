@@ -215,7 +215,7 @@
                         <configuration>
                             <archive>
                                 <manifest>
-                                    <mainClass>com.bl.bigdata.kafka.ProducerDemo</mainClass>
+                                    <mainClass>com.bl.bigdata.streaming.mykafka.ConsumerDemo</mainClass>
                                     <addClasspath>true</addClasspath>
                                 </manifest>
                             </archive>

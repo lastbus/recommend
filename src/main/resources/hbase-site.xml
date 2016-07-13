@@ -4,7 +4,7 @@
 <configuration>
   <property>
     <name>hbase.rootdir</name>
-    <value>hdfs://m78sit:8020/hbase</value>
+    <value>hdfs://nameservice1/hbase</value>
   </property>
   <property>
     <name>hbase.client.write.buffer</name>
@@ -72,7 +72,7 @@
   </property>
   <property>
     <name>hbase.zookeeper.quorum</name>
-    <value>m79sit,s80sit,s81sit</value>
+    <value>slave23.bl.bigdata,slave24.bl.bigdata,slave21.bl.bigdata,slave22.bl.bigdata,slave25.bl.bigdata</value>
   </property>
   <property>
     <name>hbase.zookeeper.property.clientPort</name>

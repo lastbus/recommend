@@ -6,4 +6,22 @@
         <args></args>
         <description>browser goods similarity</description>
     </class>
+    <class>
+        <full-name>com.bl.bigdata.search.Search</full-name>
+        <short-name>category</short-name>
+        <args></args>
+        <description>sort goods category</description>
+    </class>
+    <class>
+        <full-name>com.bl.bigdata.streaming.RecommendStreaming</full-name>
+        <short-name>streaming-view</short-name>
+        <args></args>
+        <description>spark streaming view goods</description>
+    </class>
+    <class>
+        <full-name>com.bl.bigdata.search.CategoryBand</full-name>
+        <short-name>search.category</short-name>
+        <args></args>
+        <description>搜索前台类目得分</description>
+    </class>
 </configuration>

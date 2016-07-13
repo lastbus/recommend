@@ -18,7 +18,7 @@ object ProducerDemo {
     val props = new Properties()
     props.put("bootstrap.servers", url)
     props.put("client.id", "DemoProducer")
-    props.put("acks", "0")
+    props.put("acks", "all")
     props.put("retries", "0")
     props.put("batch.size", "16384")
     props.put("linger.ms", "1")
@@ -29,10 +29,10 @@ object ProducerDemo {
 
     for (i <- 0 to 2000000000){
       try {
-        val metadata = producer.send(new ProducerRecord[String, String](topic, null, "this is a message"),
+        val metadata = producer.send(new ProducerRecord[String, String](topic, null, "foo" + i.toString),
         new Callback {
           override def onCompletion(metadata: RecordMetadata, exception: Exception): Unit = {
-            if (metadata != null ) println("topic: " + metadata.topic() + "   partition:  " + metadata.partition() + "  offset: " + metadata.offset())
+            if (metadata != null ) println("topic: " + metadata.topic() + "   partition:  " + metadata.partition() + "  offset: " + metadata.offset() + "   value: ")
             if (exception != null) println(exception.getMessage)
           }
         })
