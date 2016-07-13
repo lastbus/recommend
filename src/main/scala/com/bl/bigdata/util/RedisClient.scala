@@ -24,7 +24,7 @@ object RedisClient extends Serializable with Logging with Redis {
   }
   lazy val jedisCluster = {
     val properties = new Properties()
-    properties.load(this.getClass.getClassLoader.getResourceAsStream("jedis-cluster.properties"))
+    properties.load(this.getClass.getClassLoader.getResourceAsStream("redis-cluster.properties"))
     val sets = new util.HashSet[HostAndPort]()
     for (key <- properties.stringPropertyNames()) {
       val value = properties.getProperty(key).split(":")
