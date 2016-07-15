@@ -2,9 +2,11 @@ package com.bl.bigdata
 
 import java.util.Properties
 
-import com.bl.bigdata.util.{ConfigurationBL, SparkFactory}
-import org.apache.commons.cli._
+import com.bl.bigdata.mail.Message
+import com.bl.bigdata.similarity.SeeBuyGoodsSimilarity
+import com.bl.bigdata.util.{MyCommandLine, SparkFactory}
 import org.apache.logging.log4j.LogManager
+
 import scala.collection.mutable
 import scala.xml.XML
 
@@ -17,6 +19,9 @@ object SparkDriver {
   val logger = LogManager.getLogger(this.getClass.getName)
 
   def main(args: Array[String]) {
+
+    val optionMap = SparkDriverConf.parse(args)
+
     // load jobs
     val jobDescriptions = parseJobDescription("classes.xml")
     if (jobDescriptions.isEmpty) {
@@ -25,71 +30,69 @@ object SparkDriver {
     }
     val classMap = mutable.Map[String, JobDescription]()
     for (job <- jobDescriptions) classMap(job.shortName) = job
+
+    if (optionMap.contains(SparkDriverConf.print) ) {
+      println("\n jobs : ")
+      for (c <- classMap) {
+        println(c._1 + " : " + c._2)
+      }
+      sys.exit(0)
+    }
     val executeMap = mutable.Map[String, JobDescription]()
-    // parse command line parameters
-    SparkDriverCli.parse(args)
-    if (SparkDriverConf.optionMap.contains(SparkDriverConf.all)) {
-      if (SparkDriverConf.optionMap.contains(SparkDriverConf.include)) {
+    if (optionMap.contains(SparkDriverConf.all)) {
+      if (optionMap.contains(SparkDriverConf.include)) {
         System.err.println(s"cannot include ${SparkDriverConf.all} and ${SparkDriverConf.include} meantime.")
-        SparkDriverCli.printHelper()
+        SparkDriverConf.printHelper
         sys.exit(-1)
       }
       classMap.foreach { case (k, v) => executeMap(k) = v }
-      //exclude jobs
-      if (SparkDriverConf.optionMap.contains(SparkDriverConf.exclude)) {
-        SparkDriverConf.optionMap(SparkDriverConf.exclude).split(",").foreach { item =>
-          if (executeMap.contains(item)) executeMap -= item
-          else {
-            System.err.println(s"not known class name: ${item}.")
-            SparkDriverCli.printHelper()
-            sys.exit(-1)
-          }
-        }
-      }
     }
-    if (SparkDriverConf.optionMap.contains(SparkDriverConf.include)) {
-      SparkDriverConf.optionMap(SparkDriverConf.include).split(",").foreach { item =>
+    if (optionMap.contains(SparkDriverConf.include)) {
+       optionMap(SparkDriverConf.include).split(",").foreach { item =>
         if (classMap.contains(item)) {
           executeMap(item) = classMap(item)
         } else {
-          System.err.println(s"not known class name: ${item}.")
+          System.err.println(s"not known class name: $item.")
           sys.exit(-1)
         }
       }
     }
 
-    if (SparkDriverConf.optionMap.contains(SparkDriverConf.exclude)) {
-      SparkDriverConf.optionMap(SparkDriverConf.exclude).split(",").foreach { item =>
+    if (optionMap.contains(SparkDriverConf.exclude)) {
+      optionMap(SparkDriverConf.exclude).split(",").foreach { item =>
         if (executeMap.contains(item)) {
           executeMap -= item
         } else if (!classMap.contains(item)) {
-          System.err.println(s"not known excluded class name: ${item}.")
+          System.err.println(s"not known excluded class name: $item.")
           sys.exit(-1)
         }
       }
     }
     if (executeMap.size == 0) {
-      println("Please input jobs to run: ")
-      SparkDriverCli.printHelper()
+      logger.info("Please input jobs to run: ")
+      SparkDriverConf.printHelper
       sys.exit(-1)
     }
     logger.info("\n\n\n================   jobs to be executed   ======================")
     executeMap.foreach { case (k, v) => println("\t\t" + v) }
     println("\n\n\n")
-//    ConfigurationBL.init()
     executeMap.foreach { case (shortName, job) =>
       try {
         val clazz = Class.forName(job.fullName)
-//        clazz.getMethod("run", classOf[Array[String]]).invoke(clazz.newInstance(), job.args.asInstanceOf[Object])
+        clazz.getMethod("run", classOf[Array[String]]).invoke(clazz.newInstance(), job.args.asInstanceOf[Object])
       } catch {
         case e: Exception =>
-          logger.error("error: " + job.shortName + ": " + e.getMessage)
+          logger.error("error: " + job.shortName + ": " + e)
+          Thread.sleep(1000)
       }
+        Thread.sleep(500)
     }
 
-    println("==============   #END#   ==================")
+    logger.info("==============   #END#   ==================")
+    if (optionMap.contains(SparkDriverConf.mail)) Message.sendMail
     // destroy resources
     SparkFactory.destroyResource()
+
   }
 
   def loadProperties(path: String): Properties = {
@@ -124,65 +127,35 @@ object SparkDriver {
 
 }
 
-object SparkDriverCli {
-
-  val options = new Options
-
-  val help = new Option("h", "help", false, "print help information.")
-  val include = new Option("i", SparkDriverConf.include, true, "jobs to run.")
-  include.setArgName("className")
-  val exclude = new Option("e", SparkDriverConf.exclude, true, "jobs not to run.")
-  exclude.setArgName("className")
-  val all = new Option("a", SparkDriverConf.all, false, "run all jobs in properties file not include exclude jobs.")
-
-  options.addOption(help)
-  options.addOption(include)
-  options.addOption(exclude)
-  options.addOption(all)
-
-  val commandParser = new BasicParser
-
-  def parse(args: Array[String]): Unit = {
-    val commandLine = try {
-      commandParser.parse(options, args)
-    } catch {
-      case e: Exception =>
-        println(e.getMessage)
-        printHelper()
-        sys.exit(-1)
-    }
-
-    if (commandLine.hasOption("help")) {
-      printHelper()
-      sys.exit(-1)
-    }
-
-    if (commandLine.hasOption(SparkDriverConf.all)){
-      SparkDriverConf.optionMap(SparkDriverConf.all) = "true"
-    }
-    if (commandLine.hasOption(SparkDriverConf.exclude)) {
-      SparkDriverConf.optionMap(SparkDriverConf.exclude) = commandLine.getOptionValue(SparkDriverConf.exclude)
-    }
-    if (commandLine.hasOption(SparkDriverConf.include)) {
-      SparkDriverConf.optionMap(SparkDriverConf.include) = commandLine.getOptionValue(SparkDriverConf.include)
-    }
-
-  }
-
-  def printHelper(): Unit = {
-    val helperFormatter = new HelpFormatter
-    helperFormatter.printHelp("SparkDriver", options)
-  }
-
-}
-
 object SparkDriverConf {
 
   val include = "include"
   val exclude = "exclude"
   val all = "all"
+  val print = "print"
+  val mail = "mail"
 
-  val optionMap = mutable.Map[String, String]()
+  val sparkDriver = new MyCommandLine("SparkDriver")
+  sparkDriver.addOption("i", include, true, "jobs to be executed")
+  sparkDriver.addOption("e", exclude, true, "exclude jobs to be executed")
+  sparkDriver.addOption("a", all, false, "execute all jobs in conf file")
+  sparkDriver.addOption("p", print, false, "print all jobs")
+  sparkDriver.addOption("m", mail, false, "send mail")
+
+  def parse(args: Array[String]): Map[String, String] ={
+    sparkDriver.parser(args)
+  }
+
+  def printHelper = sparkDriver.printHelper
+
 }
 
-case class JobDescription(shortName: String, fullName: String, args: Array[String] = Array[String](), description: String = "")
+
+case class JobDescription(shortName: String, fullName: String, args: Array[String] = Array[String](), description: String = ""){
+
+  override def toString() = {
+    s"""
+      |short-name: $shortName, full-name: $fullName,  args: ${args.mkString(" ")}, description: $description
+      """.stripMargin
+  }
+}

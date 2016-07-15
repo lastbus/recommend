@@ -141,13 +141,13 @@ class Search  extends Tool
     allGoods.cache()
 
     //every category take top 30
-    val top30 = allGoods.map { case ((goodsID, category, channel), weight) => ((category, channel), Seq((goodsID, weight))) }
+    val top30 = allGoods.reduceByKey(_ + _).map { case ((goodsID, category, channel), weight) => ((category, channel), Seq((goodsID, weight))) }
       .reduceByKey(_ ++ _).mapValues(_.sortWith(_._2 > _._2).take(30)).map { item => item._2.map(t => ((t._1, item._1._2), (item._1._1, t._2))) }.flatMap (s => s)
 
     val backCategory = hiveContext.sql("select sid, category_id, channel_sid from recommendation.goods_avaialbe_for_sale_channel where channel_sid = 3")
 
-    val a = backCategory.rdd.distinct().map { row => if (row.anyNull) null else ((row.getString(0), row.getString(2)), row.getLong(1).toString) }.filter(_ != null)
-    val b = top30.join(a).map { case ((goodsID, channel), ((searchCategory, score), backCategory)) => ((backCategory, channel), Seq((goodsID, score))) }
+    val  backCategoryRDD = backCategory.rdd.distinct().map { row => if (row.anyNull) null else ((row.getString(0), row.getString(2)), row.getLong(1).toString) }.filter(_ != null)
+    val b = top30.join(backCategoryRDD).map { case ((goodsID, channel), ((searchCategory, score), backCategory)) => ((backCategory, channel), Seq((goodsID, score))) }
       .reduceByKey(_ ++ _).mapValues(_.sortWith(_._2 > _._2)).map { case ((backCategory, channel), goods) => ( "rcmd_goods_comp_ranking_" + backCategory, goods.map(_._1).mkString("#"))}
     val accumulator = sc.accumulator(0)
     val jedisCount = sc.accumulator(0)
@@ -158,7 +158,7 @@ class Search  extends Tool
 //    val categoryTop = allGoods.map { case ((goodsID, category, channel), weight) => ((category, channel), Seq((weight))) }
 //      .reduceByKey(_ ++ _).mapValues { s => s.sum / s.length }
 
-    val categoryTop = allGoods.map { case ((goodsID, category, channel), weight) => ((goodsID, channel), weight) }.join(a)
+    val categoryTop = allGoods.map { case ((goodsID, category, channel), weight) => ((goodsID, channel), weight) }.join(backCategoryRDD)
       .map { case ((goods, channel), (weight, backCategory)) => ((backCategory, channel), Seq((weight)))}
       .reduceByKey(_ ++ _).mapValues { s => s.sum }
 

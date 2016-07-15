@@ -12,7 +12,11 @@ import org.apache.spark.rdd.RDD
 class UserCookie extends Tool {
 
   override def run(args: Array[String]): Unit = {
+    val optionsMap = UserCookieConf.parser(args)
+    val output = optionsMap(UserCookieConf.output)
     logger.info("用户cookie 和用户id 开始计算......")
+    // 输出参数
+    optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("\n用户id 和 cookie \n")
     val sc = SparkFactory.getSparkContext("user cookie")
     val count = sc.accumulator(0)
@@ -22,7 +26,7 @@ class UserCookie extends Tool {
     val r = rawRDD.map(r => (r._1, Seq((r._2, r._3)))).reduceByKey(_ ++ _)
                   .map(r => { count += 1
                     ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).distinct.mkString("#"))})
-    val redisType = ConfigurationBL.get("redis.type")
+    val redisType = if (output.contains("cluster")) "cluster" else "standalone"
 //    saveListToRedis(r, count2)
     RedisClient.sparkKVToRedis(r, count2, redisType)
     Message.addMessage(s"\t member_cookie_*： $count \n")
@@ -30,24 +34,6 @@ class UserCookie extends Tool {
 
     logger.info("用户cookie 和用户id 计算结束。")
   }
-
-
-
-  def saveListToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
-    rdd.foreachPartition(partition => {
-      try {
-        val jedis = RedisClient.pool.getResource
-        partition.foreach(s => {
-          jedis.set(s._1, s._2)
-          accumulator += 1
-        })
-        jedis.close()
-      } catch {
-        case e: Exception => Message.addMessage(e.getMessage)
-      }
-    })
-  }
-
 
 }
 
@@ -62,5 +48,19 @@ object UserCookie {
     val r = new UserCookie with ToolRunner
     r.run(args)
   }
+
+}
+
+object UserCookieConf  {
+  val output = "output"
+
+  val commandLine = new MyCommandLine("userCookie")
+  commandLine.addOption("o", output, true, "output result to where", "redis-cluster")
+
+  def parser(args: Array[String]): Map[String, String] ={
+    commandLine.parser(args)
+  }
+
+
 
 }

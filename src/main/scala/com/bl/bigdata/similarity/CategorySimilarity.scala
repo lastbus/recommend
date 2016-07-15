@@ -3,7 +3,7 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.ReadData
+
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
@@ -22,33 +22,41 @@ import org.apache.spark.rdd.RDD
 class CategorySimilarity extends Tool {
 
   def run(args: Array[String]): Unit = {
+    val optionsMap = CategorySimConf.parse(args)
+
     logger.info("品类买了还买开始计算......")
+    // 输出参数
+    optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("品类买了还买:\n")
-    val outPath = ConfigurationBL.get("recmd.output")
-    val prefix = ConfigurationBL.get("category.category")
-    val redis = outPath.contains("redis")
+
+    val input = optionsMap(CategorySimConf.input)
+    val output = optionsMap(CategorySimConf.output)
+    val prefix = optionsMap(CategorySimConf.goodsIdPrefix)
+    val redis = output.contains("redis")
 
     val sc = SparkFactory.getSparkContext("品类买了还买")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
-    val limit = ConfigurationBL.get("day.before.today", "90").toInt
-    val sdf = new SimpleDateFormat("yyyyMMdd")
+    val limit = optionsMap(CategorySimConf.days).toInt
+    val sdf = new SimpleDateFormat(optionsMap(CategorySimConf.sdf))
     val date0 = new Date
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
     val sql = "select category_sid, cookie_id, event_date, behavior_type, goods_sid  " +
               "from recommendation.user_behavior_raw_data  " +
               s"where dt >= $start"
-
-    val buyGoodsRDD = ReadData.readHive(sc, sql)
-                              .map{ case Array(category, cookie, date, behaviorId, goodsId) =>
+    val sql1 = optionsMap(CategorySimConf.sql_1)
+    val userBehaviorRawDataRDD = DataBaseUtil.getData(input, sql1, start)
+    val buyGoodsRDD =userBehaviorRawDataRDD.filter(_.contains(null)).map{ case Array(category, cookie, date, behaviorId, goodsId) =>
                                           (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}
                               .filter(_._2._3 == "4000")
                               .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }
                               .distinct()
 
-    val sql2 = "select category_id, level2_id from recommendation.dim_category"
-    val categoriesRDD = ReadData.readHive(sc, sql2).map{ case Array(category, level) => (category, level)}.distinct()
+//    val sql2 = "select category_id, level2_id from recommendation.dim_category"
+    val sql2 = optionsMap(CategorySimConf.sql_2)
+    val categoryRawData = DataBaseUtil.getData(input, sql2)
+    val categoriesRDD = categoryRawData.filter(_.contains(null)).map{ case Array(category, level) => (category, level)}.distinct()
     // 将商品的末级类别用一级类别替换
     val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)
                                       .map { case (category, ((cookie, date, goodsID), kind)) => ((cookie, date, kind), category) }
@@ -68,11 +76,13 @@ class CategorySimilarity extends Tool {
                         .mapValues(seq => { accumulator += 1; seq.sortWith(_._2 > _._2).map(_._1).mkString("#")})
     sorting.persist()
     if (redis) {
-      val redisType = ConfigurationBL.get("redis.type")
+      val redisType = if (output.contains("cluster")) "cluster" else "standalone"
 
 //      sc.toRedisKV(sorting.map(s => ("rcmd_bab_category_" + s._1, s._2)))
 //      saveToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2, redisType)
+      logger.info("prepare to save data to redis")
       RedisClient.sparkKVToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2, redisType)
+      logger.info("save to redis finished")
       Message.message.append(s"\t$prefix*: $accumulator\n")
       Message.message.append(s"\t插入 redis $prefix*: $accumulator2\n")
     }
@@ -117,4 +127,36 @@ object CategorySimilarity {
     val categorySimilarity = new CategorySimilarity with ToolRunner
     categorySimilarity.run(args)
   }
+}
+
+object CategorySimConf  {
+
+  val input = "input"
+  val sql_1= "sql_1"
+  val sql_2 = "sql_2"
+  val output = "output"
+
+  val goodsIdPrefix = "prefix"
+  val days = "n-days"
+  val sdf = "dateFormat"
+
+
+  val buyGoodsSimCommand = new MyCommandLine("CategorySimilarity")
+  buyGoodsSimCommand.addOption("i", input, true, "data.source", "hive")
+  buyGoodsSimCommand.addOption("o", output, true, "output data to redis， hbase or HDFS", "redis-cluster")
+  buyGoodsSimCommand.addOption(sql_1, sql_1, true, "user.behavior.raw.data", "user.behavior.raw.data")
+  buyGoodsSimCommand.addOption(sql_2, sql_2, true, "dim.category", "dim.category")
+  buyGoodsSimCommand.addOption("p", goodsIdPrefix, true, "goods id prefix", "rcmd_bab_category_")
+  buyGoodsSimCommand.addOption("n", days, true, "days before today", "90")
+  buyGoodsSimCommand.addOption("sdf", sdf, true, "date format", "yyyyMMdd")
+
+  def parse(args: Array[String]): Map[String, String] = {
+    buyGoodsSimCommand.parser(args)
+  }
+
+
+
+
+
+
 }

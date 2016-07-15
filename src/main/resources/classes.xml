@@ -7,21 +7,60 @@
         <description>browser goods similarity</description>
     </class>
     <class>
-        <full-name>com.bl.bigdata.search.Search</full-name>
-        <short-name>category</short-name>
+        <full-name>com.bl.bigdata.similarity.SeeBuyGoodsSimilarity</full-name>
+        <short-name>see.buy</short-name>
         <args></args>
-        <description>sort goods category</description>
+        <description>看了买的商品相似度</description>
     </class>
     <class>
-        <full-name>com.bl.bigdata.streaming.RecommendStreaming</full-name>
-        <short-name>streaming-view</short-name>
+        <full-name>com.bl.bigdata.similarity.BuyGoodsSimilarity</full-name>
+        <short-name>buy.buy</short-name>
         <args></args>
-        <description>spark streaming view goods</description>
+        <description>买了还买</description>
     </class>
     <class>
-        <full-name>com.bl.bigdata.search.CategoryBand</full-name>
-        <short-name>search.category</short-name>
+        <full-name>com.bl.bigdata.similarity.CategorySimilarity</full-name>
+        <short-name>cate.sim</short-name>
         <args></args>
-        <description>搜索前台类目得分</description>
+        <description>购买品类相似度</description>
     </class>
+    <class>
+        <full-name>com.bl.bigdata.similarity.BuyActivityStatistic</full-name>
+        <short-name>buy.activity</short-name>
+        <args></args>
+        <description>上午 下午 晚上 热销品类</description>
+    </class>
+    <class>
+        <full-name>com.bl.bigdata.similarity.BrowserNotBuy</full-name>
+        <short-name>not.buy</short-name>
+        <args></args>
+        <description>看了没买</description>
+    </class>
+    <class>
+        <full-name>com.bl.bigdata.product.HotSaleGoods</full-name>
+        <short-name>hotsale</short-name>
+        <args></args>
+        <description>每个品类热销的商品</description>
+    </class>
+    <class>
+        <full-name>com.bl.bigdata.useranalyze.UserCookie</full-name>
+        <short-name>user.cookie</short-name>
+        <args></args>
+        <description>用户 id 和 cookie 对应关系</description>
+    </class>
+    <class>
+        <full-name>com.bl.bigdata.product.GoodsNewArrival</full-name>
+        <short-name>new.goods</short-name>
+        <args></args>
+        <description>新上线商品</description>
+    </class>
+<!--
+    <class>
+        <full-name>com.bl.bigdata.tfidf.GoodsSimilarityInCate</full-name>
+        <short-name>sim.in.category</short-name>
+        <args></args>
+        <description>品类里商品属性的相似度</description>
+    </class>
+-->
+
 </configuration>

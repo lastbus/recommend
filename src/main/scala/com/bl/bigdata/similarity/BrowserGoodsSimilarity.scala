@@ -3,14 +3,9 @@ package com.bl.bigdata.similarity
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.commons.cli.{BasicParser, HelpFormatter, Option, Options}
-import org.apache.spark.Accumulator
-import org.apache.spark.rdd.RDD
-
-import scala.collection.mutable
+import org.apache.commons.cli.Options
 
 /**
   * 计算用户浏览的某类商品之间的相似度
@@ -23,33 +18,38 @@ import scala.collection.mutable
 class BrowserGoodsSimilarity extends Tool {
 
   val isEmpty = (temp: String) => {
-    if (temp.trim.length == 0) true
+    if (temp == null)  true
+    else if (temp.trim.length == 0) true
     else if (temp.equalsIgnoreCase("NULL")) true
     else false
   }
 
   override def run(args: Array[String]): Unit = {
-    BrowserGoodsCommandParser.parse(args)
+    val optionsMap = BrowserGoodsCommandParser.parse(args)
+
     logger.info("看了又看开始计算.....")
+    // 输出参数
+    optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("看了又看:\n")
-    val output = BrowserGoodsConf.optionMap(BrowserGoodsConf.output)
-    val prefix = BrowserGoodsConf.optionMap(BrowserGoodsConf.prefix)
+    val input = optionsMap(BrowserGoodsCommandParser.input)
+    val output = optionsMap(BrowserGoodsCommandParser.output)
+    val prefix = optionsMap(BrowserGoodsCommandParser.prefix)
     val redis = output.contains("redis")
     val sc = SparkFactory.getSparkContext("看了又看")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
     // 根据最近多少天的浏览记录，默认 90天
-    val limit = BrowserGoodsConf.optionMap(BrowserGoodsConf.day).toInt
-    val behaviorType = BrowserGoodsConf.optionMap(BrowserGoodsConf.behaviorType)
+    val limit = optionsMap(BrowserGoodsCommandParser.days).toInt
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date0 = new Date
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
     val sql = "select cookie_id, category_sid, event_date, behavior_type, goods_sid  " +
       "from recommendation.user_behavior_raw_data  where dt >= " + start
-
-    val rawRdd = ReadData.readHive(sc, sql).map{ case Array(cookie, category, date, behaviorId, goodsId) =>
+    val sqlName = optionsMap(BrowserGoodsCommandParser.sqlName)
+    val raw = DataBaseUtil.getData(input, sqlName, start)
+    val rawRdd = raw.filter(!_.contains(null)).map{ case Array(cookie, category, date, behaviorId, goodsId) =>
                                               (cookie, category, date.substring(0, date.indexOf(" ")), behaviorId, goodsId) }
-                                            .filter(_._4 == behaviorType)
+                                            .filter(_._4 == "1000")
                                             .map { case (cookie, category, date, behaviorId, goodsId) => ((cookie, category, date), goodsId)}
                                             .filter(v => {
                                               if (v._1._2.trim.length == 0) false
@@ -73,7 +73,7 @@ class BrowserGoodsSimilarity extends Tool {
 
     // 保存到 redis 中
     if (redis) {
-      val redisType = BrowserGoodsConf.optionMap(BrowserGoodsConf.redisType)
+      val redisType = if (output.contains("cluster")) "cluster" else "standalone"
 //      saveToRedis(good1Good2Similarity, accumulator2, redisType)
       RedisClient.sparkKVToRedis(good1Good2Similarity, accumulator2, redisType)
       Message.addMessage(s"\t\t$prefix*: $accumulator\n")
@@ -81,33 +81,6 @@ class BrowserGoodsSimilarity extends Tool {
     }
     rawRdd.unpersist()
     logger.info("看了又看计算结束。")
-  }
-
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
-    rdd.foreachPartition(partition => {
-      try {
-        redisType match {
-          case "cluster" =>
-            val jedis = RedisClient.jedisCluster
-            partition.foreach { s =>
-              jedis.set(s._1, s._2)
-              accumulator += 1
-            }
-            jedis.close()
-          case "standalone" =>
-            val jedis = RedisClient.pool.getResource
-            partition.foreach { s =>
-              jedis.set(s._1, s._2)
-              accumulator += 1
-            }
-            jedis.close()
-          case _ => logger.error(s"wrong redis type $redisType ")
-        }
-
-      } catch {
-        case e: Exception => Message.addMessage(e.getMessage)
-      }
-    })
   }
 
 }
@@ -126,104 +99,25 @@ object BrowserGoodsSimilarity {
 }
 
 object BrowserGoodsCommandParser {
+
+  val prefix = "goodsIdPrefix"
+  val output = "output"
+  val sqlName = "sqlName"
+  val days = "n-days"
+  val input = "input"
+  val browserCommand = new MyCommandLine("browser")
+
   val options = new Options
 
-  val help = new Option("h", "help", false, "print help information.")
-  val input = new Option("i", "input", true, "input datasource type.")
-  input.setArgName("datasource")
-  val output = new Option("o", "output", true, "output data.")
-  output.setArgName("output")
-  val day = new Option("n", "number of days", true, "number of days before now.")
-  day.setArgName("days")
-  val behaviorType = new Option("t", "behavior.type", true, "behavior type")
-  behaviorType.setArgName("behaviorCode")
-  val redisType = new Option("r", "redis.type", true, "redis type: standalone, sentinel or cluster")
-  redisType.setArgName("redisType")
+  browserCommand.addOption("i", input, true, "input datasource type.", "hive")
+  browserCommand.addOption("sql", sqlName, true, "hive sql name in configuration file", "browser")
+  browserCommand.addOption("o", output, true, "output data.", "redis-cluster")
+  browserCommand.addOption("n", days, true, "number of days before now.", "90")
+  browserCommand.addOption("p", prefix, true, "number of days before now.", "rcmd_view_")
 
-  options.addOption(help)
-  options.addOption(input)
-  options.addOption(output)
-  options.addOption(day)
-  options.addOption(behaviorType)
-  options.addOption(redisType)
 
-  val commandParser = new BasicParser
-
-  def parse(args: Array[String]): Unit = {
-
-     val commandLine = try {
-      commandParser.parse(options, args)
-    } catch {
-      case e: Exception =>
-        println(e.getMessage)
-        printHelper()
-        sys.exit(-1)
-    }
-
-    if (commandLine.hasOption("help")) {
-      printHelper()
-      sys.exit(-1)
-    }
-
-    if (commandLine.hasOption(BrowserGoodsConf.prefix)){
-      BrowserGoodsConf.optionMap(BrowserGoodsConf.prefix) = commandLine.getOptionValue(BrowserGoodsConf.prefix)
-    }
-    if (commandLine.hasOption(BrowserGoodsConf.input)){
-      val input = commandLine.getOptionValue(BrowserGoodsConf.input)
-      if (input != "sql") {
-        System.err.println(s"cannot be $input, only support sql just now.")
-        printHelper()
-        sys.exit(-1)
-      }
-      BrowserGoodsConf.optionMap(BrowserGoodsConf.input) = commandLine.getOptionValue(input)
-    }
-    if (commandLine.hasOption(BrowserGoodsConf.output)){
-      val output = commandLine.getOptionValue(BrowserGoodsConf.output)
-      if (output != "redis") {
-        System.err.println(s"cannot be $output, only support redis just now.")
-        printHelper()
-        sys.exit(-1)
-      }
-      BrowserGoodsConf.optionMap(BrowserGoodsConf.output) = commandLine.getOptionValue(BrowserGoodsConf.output)
-    }
-    if (commandLine.hasOption(BrowserGoodsConf.day)){
-      val n = commandLine.getOptionValue(BrowserGoodsConf.day)
-      if (!"[1-9]+[0-9]*".r.pattern.matcher(n).matches()) {
-        System.err.println("not valid number.")
-        sys.exit(-1)
-      }
-      BrowserGoodsConf.optionMap(BrowserGoodsConf.day) = commandLine.getOptionValue(BrowserGoodsConf.day)
-    }
-    if (commandLine.hasOption(BrowserGoodsConf.behaviorType)){
-      BrowserGoodsConf.optionMap(BrowserGoodsConf.behaviorType) = commandLine.getOptionValue(BrowserGoodsConf.behaviorType)
-    }
-    if (commandLine.hasOption(BrowserGoodsConf.redisType)){
-      BrowserGoodsConf.optionMap(BrowserGoodsConf.redisType) = commandLine.getOptionValue(BrowserGoodsConf.redisType)
-    }
-
+  def parse(args: Array[String]): Map[String, String] = {
+    browserCommand.parser(args)
   }
 
-  def printHelper(): Unit = {
-    val helperFormatter = new HelpFormatter
-    helperFormatter.printHelp("BrowserGoodsSimilarity", options)
-  }
-}
-
-object BrowserGoodsConf {
-
-  val prefix = "prefix"
-  val output = "output"
-  val day = "day"
-  val behaviorType = "behavior.type"
-  val input = "sql"
-  val redisType = "redis.type"
-
-
-  val optionMap = mutable.Map(
-                  prefix -> "rcmd_view_",
-                  input -> "sql",
-                  behaviorType -> "1000",
-                  output -> "redis",
-                  redisType -> "cluster",
-                  day -> "90")
 }

@@ -15,22 +15,30 @@ import org.apache.spark.rdd.RDD
 class BrowserNotBuy extends Tool {
 
   override def run(args: Array[String]): Unit = {
+
+    val optionsMap = BrowserNotBuyConf.parse(args)
+
     logger.info("最近两个月浏览未购买商品开始计算......")
+    // 输出参数
+    optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("\n最近两个月浏览未购买商品 按时间排序:\n")
-    val output = ConfigurationBL.get("recmd.output")
-    val prefix = ConfigurationBL.get("browser.not.buy")
+    val input = optionsMap(BrowserNotBuyConf.input)
+    val output = optionsMap(BrowserNotBuyConf.output)
+    val prefix = optionsMap(BrowserNotBuyConf.goodsIdPrefix)
     val redis = output.contains("redis")
     val sc = SparkFactory.getSparkContext("最近两个月浏览未购买商品 按时间排序")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
-    val sdf = new SimpleDateFormat("yyyyMMdd")
+    val sdf = new SimpleDateFormat(optionsMap(BrowserNotBuyConf.sdf))
     val date0 = new Date
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * 60))
     val sql = "select cookie_id, event_date, behavior_type, category_sid, goods_sid " +
               " from recommendation.user_behavior_raw_data  " +
               s"where dt >= $start"
 
-    val a = ReadData.readHive(sc, sql).map { case Array(cookie, date, behavior, category, goods) =>
+    val sqlName = optionsMap(BrowserNotBuyConf.sql)
+    val rawRDD = DataBaseUtil.getData(input, sqlName, start)
+    val a = rawRDD.filter(_.contains(null)).map { case Array(cookie, date, behavior, category, goods) =>
                                                   ((cookie, date.substring(0, date.indexOf(" "))), behavior, (category, goods)) }
 
     val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000") }
@@ -40,7 +48,7 @@ class BrowserNotBuy extends Tool {
                                     (prefix + item._1, item._2.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).sortWith(_._2 > _._2).map(_._1).distinct.mkString(",")).mkString("#"))})
     browserNotBuy.persist()
     if (redis) {
-      val redisType = ConfigurationBL.get("redis.type")
+      val redisType = if (output.contains("cluster")) "cluster" else "standalone"
 //      saveToRedis(browserNotBuy, accumulator2, redisType)
       RedisClient.sparkKVToRedis(browserNotBuy, accumulator2, redisType)
       Message.addMessage(s"\t$prefix*: $accumulator\n")
@@ -96,4 +104,31 @@ object BrowserNotBuy {
     val browserNotBuy = new BrowserNotBuy with ToolRunner
     browserNotBuy.run(args)
   }
+}
+
+object BrowserNotBuyConf  {
+
+  val input = "input"
+  val sql= "sql"
+  val output = "output"
+
+  val goodsIdPrefix = "goods id prefix"
+  val top = "top"
+  val days = "n-days"
+  val sdf = "dateFormat"
+
+
+  val buyGoodsSimCommand = new MyCommandLine("browserNotBuy")
+  buyGoodsSimCommand.addOption("i", input, true, "data.source", "hive")
+  buyGoodsSimCommand.addOption("o", output, true, "output data to redis， hbase or HDFS", "redis-cluster")
+  buyGoodsSimCommand.addOption(sql, sql, true, "user.behavior.raw.data", "browser.not.buy")
+  buyGoodsSimCommand.addOption("pm", goodsIdPrefix, true, "goods id prefix", "rcmd_cookieid_view_")
+  buyGoodsSimCommand.addOption("n", days, true, "days before today", "90")
+  buyGoodsSimCommand.addOption("sdf", sdf, true, "date format", "yyyyMMdd")
+  buyGoodsSimCommand.addOption("top", top, true, "top n goods", "20")
+
+  def parse(args: Array[String]): Map[String, String] ={
+    buyGoodsSimCommand.parser(args)
+  }
+
 }

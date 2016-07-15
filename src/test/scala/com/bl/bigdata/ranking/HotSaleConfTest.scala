@@ -1,6 +1,5 @@
 package com.bl.bigdata.ranking
 
-import com.bl.bigdata.util.{PropertyUtil, ConfigurationBL}
 import org.junit.Test
 
 /**
