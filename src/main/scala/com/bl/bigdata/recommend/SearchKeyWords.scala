@@ -17,9 +17,9 @@ class SearchKeyWords {
     val sql = "select onsite_search_word from recommendation.search_hot_keywords"
     val hotWords = hiveContext.sql(sql).rdd.map(row => row.getString(0)).collect()
     val words = hotWords.mkString("#")
-    val jedis = RedisClient.pool.getResource
-    jedis.set("index_hotwords", words)
-    jedis.close()
+    val jedisCluster = RedisClient.jedisCluster
+    jedisCluster.set("search_index_hotwords", words)
+  //  jedisCluster.close()
   //  sc.stop()
   }
 
@@ -43,12 +43,12 @@ class SearchKeyWords {
     }
     )
     tRdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
+      val jedis = RedisClient.jedisCluster
       partition.foreach(s => {
         //println(s._1.toString+"->"+ s._2)
-        jedis.set("cate_hotwords_" + s._1.toString, s._2)
+        jedis.set("search_cate_hotwords_" + s._1.toString, s._2)
       })
-      jedis.close()
+      //jedis.close()
     })
    // sc.stop()
   }
@@ -75,11 +75,11 @@ class SearchKeyWords {
     )
 
     tRdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
+      val jedis = RedisClient.jedisCluster
       partition.foreach(s => {
-        jedis.set("term_category_" + s._1.toString.toLowerCase, s._2)
+        jedis.set("search_term_category_" + s._1.toString.toLowerCase, s._2)
       })
-      jedis.close()
+     // jedis.close()
     })
    // sc.stop()
 
@@ -91,15 +91,15 @@ class SearchKeyWords {
     val sql = "select distinct keyword from recommendation.term_category where count>5"
     val termRdd = hiveContext.sql(sql).rdd.map(row => URLDecoder.decode(row.getString(0).trim.toLowerCase.replace(" ", ""), "UTF8")).filter(_.trim.length > 0)
     termRdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
+      val jedis = RedisClient.jedisCluster
       partition.foreach(s => {
         var termList: List[String] = List[String]()
-        val catCnt = jedis.get("term_category_" + s)
+        val catCnt = jedis.get("search_term_category_" + s)
         if (catCnt != null) {
           val catArray = catCnt.split("#").slice(0, 3)
           for (cat <- catArray) {
             val catId = cat.split(":")(0)
-            val terms = jedis.get("cate_hotwords_" + catId)
+            val terms = jedis.get("search_cate_hotwords_" + catId)
             val ta = terms.split("#").slice(0, 20)
             for (t <- ta) {
               if (t.trim.length != 0 && !termList.contains(t.trim.toLowerCase()) && s.trim.toLowerCase().compareTo(t.trim.toLowerCase()) != 0) {
@@ -111,9 +111,9 @@ class SearchKeyWords {
 
         val a: List[(Int, String)] = for (rs <- termList; dist = LevenshteinMetric.compare(s, rs)) yield (dist.get, rs)
         val rvalue = a.distinct.sortWith(_._1 < _._1).filter(_._1 != 0).slice(0, 10).map { case (a, b) => b }.mkString("#")
-        jedis.set("term_sim_" + s, rvalue)
+        jedis.set("search_term_sim_" + s, rvalue)
       })
-      jedis.close()
+ //     jedis.close()
     })
     //sc.stop()
   }
@@ -121,18 +121,20 @@ class SearchKeyWords {
   def dimCategory(): Unit = {
     val sc = SparkFactory.getSparkContext("dim_search_category")
     val hiveContext = new HiveContext(sc)
-    val sql = "select lev1_sid,lev2_sid,lev3_sid,id from  recommendation.dim_search_category"
-    val cateRdd = hiveContext.sql(sql).rdd.map(row => Set((row.get(0), row.get(3)), (row.get(1), row.get(3)), (row.get(2), row.get(3))))
-    val subCateRdd = cateRdd.flatMap(s => (s.map(x => x)))
+    val sql = "select lev1_sid,lev2_sid,lev3_sid,lev4_sid,lev5_sid,id from  recommendation.dim_search_category"
+    val cateRdd = hiveContext.sql(sql).rdd.map(row => Set((row.get(0), row.get(5)), (row.get(1), row.get(5)), (row.get(2), row.get(5)),
+      (row.get(3), row.get(5)),(row.get(4), row.get(5))
+    ))
+    val subCateRdd = cateRdd.flatMap(s => (s.map(x => x))).filter(x=>x._1!=null)
     val resRdd = subCateRdd.mapValues(x => Set(x.toString)).reduceByKey(_ ++ _).mapValues(x => x.mkString("#")).filter(_._1 != null)
     resRdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
+      val jedis = RedisClient.jedisCluster
       partition.foreach(s => {
         if( s._1.toString.compareTo(s._2)!=0) {
-          jedis.set("sub_sch_cate_" + s._1.toString, s._2)
+          jedis.set("search_sub_sch_cate_" + s._1.toString, s._2)
         }
       })
-      jedis.close()
+    //  jedis.close()
     })
     sc.stop()
   }

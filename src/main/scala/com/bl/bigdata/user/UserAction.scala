@@ -6,12 +6,12 @@ import java.util.Date
 import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.util.{RedisClient, SparkFactory}
 import org.apache.spark.sql.hive.HiveContext
+import redis.clients.jedis.Jedis
 
 /**
  * Created by HJT20 on 2016/5/17.
  */
 class UserAction {
-
 
   def categoryPref(): Unit = {
     val sc = SparkFactory.getSparkContext("category_pref")
@@ -31,6 +31,7 @@ class UserAction {
     val catesRdd  = hiveContext.sql(catesSql).rdd.map(row=>((row.getString(0), row.getString(1)),row.getLong(2)))
     //((102564,2016-04-16),((88867259525614535970958,1),3))
     val unormRdd = ucAcuRdd.join(catesRdd)
+    //unormRdd.saveAsTextFile("/home/hdfs/unormRdd")
     //((103466,(21021460629373192854469,4)),0.18402591023557582,33,2016-04-14)
     val prefRdd = unormRdd.map(x=>{
       val sdf = new SimpleDateFormat("yyyy-MM-dd")
@@ -47,12 +48,15 @@ class UserAction {
             x.sortWith((a,b)=>a._2>b._2)
           }).mapValues(lt=>lt.map{case(x,y)=>x+":"+y}.mkString("#"))
 
+    //prefRdd.saveAsTextFile("/home/hdfs/pref")
     prefRdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
+      val jedis = RedisClient.jedisCluster
+      //val jedis = new Jedis("10.201.48.13", 6379);
       partition.foreach(s => {
+        println("cate_pref_"+s._1,s._2)
        jedis.set("cate_pref_"+s._1,s._2)
       })
-      jedis.close()
+     // jedis.close()
     })
 }
 
@@ -103,11 +107,12 @@ class UserAction {
     }).reduceByKey(_ ++ _).mapValues(cgs=>cgs.mkString("#"))
 
     prefRdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
+      //val jedis = RedisClient.pool.getResource
+      val jedisCluster = RedisClient.jedisCluster
       partition.foreach(s => {
-        jedis.set("rcmd_goods_pref_"+s._1,s._2)
+        jedisCluster.set("rcmd_goods_pref_"+s._1,s._2)
       })
-      jedis.close()
+     // jedis.close()
     })
 
     sc.stop()

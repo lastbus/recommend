@@ -44,12 +44,13 @@ class GoodsAvailableForSale {
    // r.foreach(println)
     r.foreachPartition(partition => {
       try {
-        val jedis = RedisClient.pool.getResource
+//        val jedis = RedisClient.pool.getResource
+        val jedisCluster = RedisClient.jedisCluster
         partition.foreach(data => {
           println(data._1)
-          jedis.hmset(data._1, data._2)
+          jedisCluster.hmset(data._1, data._2)
         })
-        jedis.close()
+ //       jedisCluster.close()
       } catch {
         case e: Exception => e.printStackTrace()
       }

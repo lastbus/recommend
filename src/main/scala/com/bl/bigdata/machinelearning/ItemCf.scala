@@ -9,13 +9,13 @@ import org.apache.spark.sql.hive.HiveContext
 /**
  * Created by HJT20 on 2016/6/13.
  */
-class UserCF {
+class ItemCF {
   def usertaste(): Unit = {
-    val sc = SparkFactory.getSparkContext("user_cf")
+    val sc = SparkFactory.getSparkContext("item_cf")
     val hiveContext = new HiveContext(sc)
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date0 = new Date
-    val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * 10))
+    val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * 20))
     val sql = "select member_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start and behavior_type=1000 and member_id is not null and  member_id <>'null' and member_id <>'NULL' and member_id <>''"
     //ck,date,category,goods_sid=>1
@@ -47,78 +47,70 @@ class UserCF {
     //((100000000019135,103071),List((264363,0.0010033912775533338), (268533,0.0010033912775533338)))
     .flatMap(x=>{
       val mId=x._1._1
-      x._2.take(20).map(y=>(mId,(y._1,y._2)))
+      x._2.map(y=>(mId,(y._1,y._2)))
 
     })
 
     val idTransRdd = prefRdd.map { case (uId, (pId, rate)) => uId }.distinct().zipWithUniqueId()
     val jRdd = prefRdd.join(idTransRdd)
     val uprRdd = jRdd.map { case ((mId, ((pId, rate), uId))) => (uId, (pId, rate)) }
-    val IdRdd = jRdd.map { case ((mId, ((pId, rate), uId))) => (uId, mId) }.distinct()
-    val trainRDD = uprRdd.map { case (userIndex, (productIndex, rating)) =>
-      (userIndex, Map(productIndex.toString -> rating.toDouble))
+    val IdRdd = jRdd.map { case ((mId, ((pId, rate), uId))) => (uId, mId) }.distinct().cache()
+    val purRdd = uprRdd.map { case (userIndex, (productIndex, rating)) =>
+      (productIndex, Map(userIndex -> rating.toDouble))
     }.reduceByKey(_ ++ _)
 
-    //(960,Map(238188 -> 0.7737809374999998, 238169 -> 0.25792697916666657))
- //   trainRDD.saveAsTextFile("/home/hdfs/tranRdd")
-  val randIndexRdd = trainRDD.map(user=>{
-      val nkey = scala.util.Random.nextInt(30)
-            (nkey,user)
-    })
-//    randIndexRdd.foreach(println)
-// (12,((717,Map(96969 -> 0.7737809374999998)),(119,Map(68370 -> 0.19344523437499994))))
-   val partUserRdd = randIndexRdd.join(randIndexRdd).mapValues(u=>Seq(u)).reduceByKey( _ ++ _)
-    .flatMapValues(us=>{us.union(us)
-    })
 
-    val tmpUpRdd = partUserRdd
-     .map(kv=>kv._2).map {
-              case (ud1, ud2) =>
-                val id1 = ud1._1
-                val id2 = ud2._1
-                val d1 = ud1._2
-                val d2 = ud2._2
-                var sum = 0.0
-                var divider1 = 0.0
-                d1.foreach { case (k, v) => {
-                  val tmp = d2.get(k)
-                  if (!tmp.isEmpty) sum += (v * tmp.get)
-                  divider1 += v * v
-                }
-                }
-                val divider2 = d2.map(s => s._2 * s._2).sum
-                (id1, (id2, sum / (scala.math.sqrt(divider1) * scala.math.sqrt(divider2))))
-            }.filter(s => s._2._2.toDouble > 0.0001 && s._1 != s._2._1).mapValues(v => Seq(v))
-            .reduceByKey(_ ++ _).distinct().mapValues(v => v.sortWith((a, b) => a._2 < b._2)).mapValues(v => v.take(20))
+    val purRdd2 = uprRdd.map { case (userIndex, (productIndex, rating)) =>
+      (productIndex, (userIndex, rating.toDouble))
 
-    val nbsRdd = tmpUpRdd.flatMap(x => {
-      val uId1 = x._1
-      val nbs = x._2
-      nbs.map(y => ((y._1, (y._2, uId1))))
-    }).join(uprRdd)
-      .map { case (nb, ((sim, uId), (pId, deg))) => {
-        (uId, (pId, (sim * deg)))
-      }
-      }.mapValues(v => Seq(v)).reduceByKey(_ ++ _).mapValues(v => v.sortWith((a, b) => a._2 > b._2).take(60)).join(IdRdd)
+    }
+
+    val ppRdd = purRdd.cartesian(purRdd)
+    val tmpUpRdd = ppRdd.map {
+      case (ud1, ud2) =>
+        val id1 = ud1._1
+        val id2 = ud2._1
+        val d1 = ud1._2
+        val d2 = ud2._2
+        var sum = 0.0
+        var divider1 = 0.0
+        d1.foreach { case (k, v) => {
+          val tmp = d2.get(k)
+          if (!tmp.isEmpty) sum += (v * tmp.get)
+          divider1 += v * v
+        }
+        }
+        val divider2 = d2.map(s => s._2 * s._2).sum
+        (id1, (id2, sum / (scala.math.sqrt(divider1) * scala.math.sqrt(divider2))))
+    }.filter(s => s._2._2.toDouble > 0.0001 && s._1 != s._2._1).mapValues(v => Seq(v))
+      .reduceByKey(_ ++ _).distinct().mapValues(v => v.sortWith((a, b) => a._2 < b._2)).mapValues(v => v.take(20)).cache()
+
+    val pupRdd = purRdd2.join(tmpUpRdd).flatMap{x=>{
+      val uId = x._2._1._1
+      val deg = x._2._1._2.toDouble
+      x._2._2.map{case(pId,rate)=>
+      {
+        (uId,(pId,rate*deg))
+      }}
+    }}.mapValues(pd=>Seq(pd)).reduceByKey(_ ++ _).mapValues(v => v.sortWith((a, b) => a._2 > b._2).take(60)).join(IdRdd)
       .map(v => {
-        val data = v._2
-        val pds = data._1
-        val spds = pds.map(x =>
-          x._1
-        ).distinct.mkString("#")
-        val mId = data._2
-        (mId, spds)
-      }
-
+                val data = v._2
+                val pds = data._1
+                val spds = pds.map(x =>
+                  x._1
+                ).distinct.mkString("#")
+                val mId = data._2
+                (mId, spds)
+              }
       )
-    nbsRdd.foreachPartition(partition => {
+
+    pupRdd.foreachPartition(partition => {
       try {
         val jedisCluster = RedisClient.jedisCluster
         partition.foreach(data => {
-          println("rcmd_usercf_"+data._1)
-          jedisCluster.set("rcmd_usercf_"+data._1, data._2)
+          jedisCluster.set("rcmd_itemcf_"+data._1, data._2)
         })
-//        jedisCluster.close()
+        //        jedisCluster.close()
       } catch {
         case e: Exception => e.printStackTrace()
       }
@@ -126,13 +118,11 @@ class UserCF {
     })
     sc.stop()
   }
-
-
 }
 
-object UserCF {
+object ItemCF {
   def main(args: Array[String]) {
-    val uf = new UserCF
-    uf.usertaste()
+    val itcf = new ItemCF
+    itcf.usertaste()
   }
 }

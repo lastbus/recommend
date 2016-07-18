@@ -49,12 +49,34 @@ class AlsBasedRcmd {
     //((100000000019135,103071),List((264363,0.0010033912775533338), (268533,0.0010033912775533338)))
     .flatMap(x=>{
       val mId=x._1._1
-      x._2.take(5).map(y=>(mId,(y._1,y._2)))
+      // x._2.take(5).map(y=>(mId,(y._1,y._2)))
+      //由5个改为20个
+      x._2.take(20).map(y=>(mId,(y._1,y._2)))
 
     })
 
-    val idTransRdd = prefRdd.map { case (uId, (pId, rate)) => uId }.distinct().zipWithUniqueId()
-    val jRdd = prefRdd.join(idTransRdd)
+
+    //购买行为
+    val shopsql = "select member_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
+      s"where dt >= $start and behavior_type=4000 and member_id is not null and  member_id <>'null' and member_id <>'NULL' and member_id <>''"
+    //memberId,date,category,goods_sid=>1
+    val shopRdd = hiveContext.sql(sql).rdd.map(row => (row.getString(0), row.getString(1).substring(0, 10), row.getString(3),
+      row.getString(4), 2))
+    val transShopRdd = shopRdd.map{case(memberId,date,category,goods_sid,degree)=>
+      val sdf = new SimpleDateFormat("yyyy-MM-dd")
+      val today = sdf.format(new Date)
+      val b=sdf.parse(today).getTime-sdf.parse(date).getTime
+      val num=b/(1000*3600*24)
+      (memberId,(goods_sid,degree *scala.math.pow(0.75,num)))
+    }
+   val userRdd =  prefRdd.union(transShopRdd).map{case(memberId,(goods_sid,degree))=>
+     ((memberId,goods_sid),degree)
+   }.reduceByKey(_ + _).map { case ((memberId, goods_sid), degree) =>
+     (memberId,(goods_sid,degree))
+   }
+
+    val idTransRdd = userRdd.map { case (uId, (pId, rate)) => uId }.distinct().zipWithUniqueId()
+    val jRdd = userRdd.join(idTransRdd)
     val inputRdd = jRdd.map { case ((mId, ((pId, rate), uId))) => (uId, pId, rate) }
     val users = jRdd.map { case ((mId, ((pId, rate), uId))) => (uId, mId) }.distinct().collect
     val trainRDD = inputRdd.map { case (userIndex, productIndex, rating) =>
@@ -65,19 +87,23 @@ class AlsBasedRcmd {
     val model = ALS.train(trainRDD, rank, iterator, 0.01)
     //val bmodel = sc.broadcast(model)
     //val dmodel = bmodel.value
-    val jedis = RedisClient.pool.getResource
+    //val jedis = RedisClient.pool.getResource
+    val jedisCluster = RedisClient.jedisCluster
+    var cnt = 1;
     val upRdd = users.foreach { case (uId, mId) => {
-      val K = 40
+      cnt+=1
+      val K = 60
       val topKRecs = model.recommendProducts(uId.toInt, K)
       val prods = topKRecs.map(r => {
         r.product
       }
       ).mkString("#")
       println(mId+":"+prods)
-      jedis.set("rcmd_als_" + mId, prods)
+      println(cnt+"-------------------------")
+      jedisCluster.set("rcmd_als_" + mId, prods)
     }
     }
-    jedis.close()
+    //jedisCluster.close()
     sc.stop()
   }
 
