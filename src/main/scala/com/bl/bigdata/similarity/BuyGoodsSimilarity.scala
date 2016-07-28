@@ -18,13 +18,17 @@ import org.apache.spark.rdd.RDD
 class BuyGoodsSimilarity extends Tool{
 
   override def run(args: Array[String]): Unit = {
-    val optionsMap = BuyGoodsSimConf.parse(args)
-
+    val optionsMap =  try {
+      BuyGoodsSimConf.parse(args)
+    } catch {
+      case e: Throwable =>
+        logger.error("command line parser error : "  + e)
+        BuyGoodsSimConf.printHelp
+        return
+    }
     logger.info("买了还买开始计算......")
-    // 输出参数
     optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("买了还买:")
-
     val output = optionsMap(BuyGoodsSimConf.output)
     val prefix = optionsMap(BuyGoodsSimConf.goodsIdPrefix)
     val redis = output.contains("redis")
@@ -32,38 +36,38 @@ class BuyGoodsSimilarity extends Tool{
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
-
     val limit = optionsMap(BuyGoodsSimConf.days).toInt
     val sdf = new SimpleDateFormat(optionsMap(BuyGoodsSimConf.sdf))
     val date0 = new Date
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
 
-    val BehaviorRawDataRDD = DataBaseUtil.getData(optionsMap(BuyGoodsSimConf.input), optionsMap(BuyGoodsSimConf.sql_1), start)
+    val behaviorRawDataRDD = DataBaseUtil.getData(optionsMap(BuyGoodsSimConf.input), optionsMap(BuyGoodsSimConf.sql_1), start)
 
-    val sql = "select category_sid, cookie_id, event_date, behavior_type, goods_sid " +
-      " from recommendation.user_behavior_raw_data  " +
-      s"where dt >= $start"
-//    ReadData.readHive(sc, sql)
-    val buyGoodsRDD = BehaviorRawDataRDD.filter(s => s.contains(null)).map { case Array(category, cookie, date, behaviorId, goodsId) =>
-                                            (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId)) }
+    val sql = "select u.category_sid, u.cookie_id, u.event_date, u.behavior_type, u.goods_sid, g.store_sid " +
+      " from recommendation.user_behavior_raw_data u  inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid " +
+      s"where u.dt >= $start"
+    val buyGoodsRDD = behaviorRawDataRDD.filter(a => a(0) != null && a(1) != null && a(2) != null && a(3) != null && a(4) != null)
+                              .map { case Array(category, cookie, date, behaviorId, goodsId, storeId) =>
+                                            (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId, storeId)) }
                               .filter(_._2._3 == "4000")
-                              .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }
+                              .map { case (category, (cookie, date, behaviorID, goodsID, storeId)) => (category, (cookie, date, goodsID, storeId)) }
                               .distinct()
 
     val categoryRDD = DataBaseUtil.getData(optionsMap(BuyGoodsSimConf.input), optionsMap(BuyGoodsSimConf.sql_2))
 
     val sql2 = "select category_id, level2_id from recommendation.dim_category"
-//    ReadData.readHive(sc, sql2)
-    val categoriesRDD = categoryRDD.filter(s => s.contains(null)).map{ case Array(category, level) => (category, level)}.distinct().map(s => (s._1.toString, s._2.toString))
+
+    val categoriesRDD = categoryRDD.filter(s => !s.contains(null)).map{ case Array(category, level) => (category, level)}.distinct().map(s => (s._1.toString, s._2.toString))
     // 将商品的末级类别用一级类别替换
     val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)
-                                      .map { case (category, ((cookie, date, goodsID), kind)) => ((cookie, date, kind), goodsID) }
+                                      .map { case (category, ((cookie, date, goodsID, storeId), kind)) => ((cookie, date, kind, storeId), goodsID) }
     // 统计每种物品的购买数量
-    val buyCount = buyGoodsKindRDD.map{ case ((cookie, date, kind), goodsID) => (goodsID, 1)}.reduceByKey(_ + _)
+    val buyCount = buyGoodsKindRDD.map{ case ((cookie, date, kind, storeId), goodsID) => (goodsID, 1)}.reduceByKey(_ + _)
+
     // 计算用户购买物品在同一类别下的关联度
     val result0 = buyGoodsKindRDD.join(buyGoodsKindRDD)
-                                  .filter { case ((cookie, date, kind), (goodsID1, goodsID2)) => goodsID1 != goodsID2 }
-                                  .map { case ((cookie, date, kind), (goodsID1, goodsID2)) => ((goodsID1, goodsID2), 1) }
+                                  .filter { case ((cookie, date, kind, storeId), (goodsID1, goodsID2)) => goodsID1 != goodsID2 }
+                                  .map { case ((cookie, date, kind, storeId), (goodsID1, goodsID2)) => ((goodsID1, goodsID2), 1) }
                                   .reduceByKey (_ + _)
                                   .map { case ((goodsID1, goodsID2), count) => (goodsID2, (goodsID1, count)) }
     val result = result0.join(buyCount)
@@ -73,8 +77,7 @@ class BuyGoodsSimilarity extends Tool{
                         .mapValues(seq => { accumulator += 1; seq.sortWith(_._2 > _._2).map(_._1).mkString("#")})
     sorting.persist()
     if (redis) {
-      val redisType = if (output.contains("cluster")) "cluster" else "standalone"
-//      saveToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2, redisType)
+      val redisType = if (output.contains("cluster")) RedisClient.cluster else RedisClient.standalone
       RedisClient.sparkKVToRedis(sorting.map(s => (prefix + s._1, s._2)), accumulator2, redisType)
       Message.addMessage(s"\tr$prefix*: $accumulator.\n")
       Message.addMessage(s"\t插入 redis $prefix*: $accumulator2.\n")
@@ -83,33 +86,6 @@ class BuyGoodsSimilarity extends Tool{
     logger.info("买了还买计算结束。")
 
   }
-
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
-    rdd.foreachPartition(partition => {
-      try {
-        redisType match {
-          case "cluster" =>
-            val jedis = RedisClient.jedisCluster
-            partition.foreach { s =>
-              jedis.set(s._1, s._2)
-              accumulator += 1
-            }
-            jedis.close()
-          case "standalone" =>
-            val jedis = RedisClient.pool.getResource
-            partition.foreach { s =>
-              jedis.set(s._1, s._2)
-              accumulator += 1
-            }
-            jedis.close()
-          case _ => logger.error(s"wrong redis type $redisType ")
-        }
-      } catch {
-        case e: Exception => Message.addMessage(e.getMessage)
-      }
-    })
-  }
-
 
 }
 
@@ -150,6 +126,7 @@ object BuyGoodsSimConf  {
     buyGoodsSimCommand.parser(args)
   }
 
+  def printHelp = buyGoodsSimCommand.printHelper
 
 
 }

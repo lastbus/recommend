@@ -7,7 +7,7 @@
 
     <properties>
         <scala.version>2.10.4</scala.version>
-        <java.version>1.7</java.version>
+        <java.version>1.8</java.version>
         <cdh.version>cdh5.4.8</cdh.version>
     </properties>
 
@@ -18,6 +18,12 @@
         </repository>
     </repositories>
     <dependencies>
+
+        <!--<dependency>-->
+            <!--<groupId>org.apache.zookeeper</groupId>-->
+            <!--<artifactId>zookeeper</artifactId>-->
+            <!--<version>3.4.8</version>-->
+        <!--</dependency>-->
 
          <!-- hadoop -->
         <dependency>
@@ -39,6 +45,12 @@
         </dependency>
 
         <!-- hbase -->
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-common</artifactId>
+            <version>1.0.0-${cdh.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-client</artifactId>
@@ -184,7 +196,18 @@
     </dependencies>
     <build>
         <sourceDirectory>src/main/scala</sourceDirectory>
+
         <plugins>
+            <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <encoding>UTF-8</encoding>
+                        <source>${java.version}</source>
+                        <target>${java.version}</target>
+                        <showWarnings>true</showWarnings>
+                    </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.scala-tools</groupId>
                 <artifactId>maven-scala-plugin</artifactId>

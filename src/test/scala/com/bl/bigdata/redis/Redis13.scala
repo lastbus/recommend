@@ -17,10 +17,22 @@ object Redis13 {
 //    jedisClusterNodes.add(new HostAndPort("10.201.129.75", 6379))
 //    jedisClusterNodes.add(new HostAndPort("10.201.129.80", 6379))
 
+//    val r = "rcmd_cate_hotsale_.*_.*".r.pattern
     val jedisCluster = new JedisCluster(jedisClusterNodes)
-    val k = jedisCluster
-
-
+    val ks = jedisCluster.getClusterNodes
+//    var  i = 0
+    import scala.collection.JavaConversions._
+    for (k <- ks.keySet()){
+//      val kk = ks.get(k).getResource.keys("rcmd_view_*")
+//      val kk = ks.get(k).getResource.keys("rcmd_shop_*")
+//      val kk = ks.get(k).getResource.keys("rcmd_bab_goods_*")
+//      val kk = ks.get(k).getResource.keys("rcmd_cate_hotsale_*")
+//      val kk = ks.get(k).getResource.keys("rcmd_cate_goods_*")
+        val kk = ks.get(k).getResource.keys("rcmd_cate_goods_*")
+      for (k00 <- kk){
+        jedisCluster.del(k00)
+      }
+    }
     jedisCluster.close()
 
 

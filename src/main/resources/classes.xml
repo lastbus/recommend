@@ -22,7 +22,7 @@
         <full-name>com.bl.bigdata.similarity.CategorySimilarity</full-name>
         <short-name>cate.sim</short-name>
         <args></args>
-        <description>购买品类相似度</description>
+        <description>品类买了还买</description>
     </class>
     <class>
         <full-name>com.bl.bigdata.similarity.BuyActivityStatistic</full-name>
@@ -53,6 +53,12 @@
         <short-name>new.goods</short-name>
         <args></args>
         <description>新上线商品</description>
+    </class>
+    <class>
+        <full-name>com.bl.bigdata.product.GoodsForSale</full-name>
+        <short-name>goods</short-name>
+        <args></args>
+        <description>goods and category mapping</description>
     </class>
 <!--
     <class>

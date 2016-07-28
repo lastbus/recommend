@@ -13,27 +13,22 @@ import org.json.JSONObject
   */
 object PCGLHandler {
 
-  lazy val hTable: Table = HBaseConnectionPool.connection.getTable(TableName.valueOf("recommend"))
+  lazy val hTable: Table = HBaseConnectionPool.connection.getTable(TableName.valueOf("rcmd_user_view"))
   val cal = Calendar.getInstance()
   val columnFamilyBytes = Bytes.toBytes("recommend")
   val columnBytes = Bytes.toBytes("pcgl")
   val sdf = new SimpleDateFormat("yyyyMMdd")
 
   def handler(json: JSONObject): Unit = {
-    val eventDate = json.getString("eventDate").toLong
     val memberId = json.getString("memberId")
+    if (memberId == null || memberId.length == 0 || memberId.equalsIgnoreCase("NULL")) return
+    val eventDate = json.getString("eventDate")
     val channel = json.getString("channel")
     val recResult = json.getJSONObject("recResult").getJSONArray("goodsList")
-
-    val date = sdf.format(new Date(eventDate))
-    val j = new JSONObject()
-    j.put("goodsList", recResult)
-
-    val put = new Put(Bytes.toBytes(memberId.reverse + "-" + channel + "-" + date))
-    put.addColumn(columnFamilyBytes, columnBytes, Bytes.toBytes(j.toString()))
-
+    val key = channel + "_" + memberId + "_" + eventDate
+    val put = new Put(Bytes.toBytes(key))
+    put.addColumn(columnFamilyBytes, columnBytes, Bytes.toBytes(recResult.toString()))
     hTable.put(put)
-
   }
 
 

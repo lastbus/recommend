@@ -20,10 +20,15 @@ import com.bl.bigdata.util._
 class BuyActivityStatistic extends Tool {
 
   override def run(args: Array[String]): Unit = {
-
-    val optionsMap = BuyGoodsSimConf.parse(args)
-
     logger.info("上午、下午、晚上购买类目开始计算......")
+    val optionsMap = try {
+      BuyActivityConf.parse(args)
+    } catch {
+      case e: Throwable =>
+        logger.error("command line parser error: " + e)
+        BuyActivityConf.printHelp
+        return
+    }
     // 输出参数
     optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("上午 下午 晚上 购买类目:\n")
@@ -32,7 +37,7 @@ class BuyActivityStatistic extends Tool {
     val outputPath = optionsMap(BuyGoodsSimConf.output)
     val redis = outputPath.contains("redis")
     val num = optionsMap(BuyActivityConf.top).toInt
-    val sc = SparkFactory.getSparkContext("上午 下午 晚上 购买类目")
+    SparkFactory.getSparkContext("上午 下午 晚上 购买类目")
     val limit = optionsMap(BuyActivityConf.days).toInt
     val sdf = new SimpleDateFormat(optionsMap(BuyActivityConf.sdf))
     val date = new Date
@@ -67,16 +72,28 @@ class BuyActivityStatistic extends Tool {
                         .take(num).map(_._1).mkString("#")
 
     if (redis){
-//      val jedis = new Jedis(ConfigurationBL.get("redis.host"), ConfigurationBL.get("redis.port", "6379").toInt)
-      val jedisCluster = RedisClient.jedisCluster
-      jedisCluster.set("rcmd_topcategory_forenoon", morning)
-      jedisCluster.set("rcmd_topcategory_afternoon", noon)
-      jedisCluster.set("rcmd_topcategory_evening", evening)
-//      jedis.close()
-      Message.addMessage(s"\t上午:\n\t\t$morning\n")
-      Message.addMessage(s"\t中午:\n\t\t$noon\n")
-      Message.addMessage(s"\t晚上:\n\t\t$evening\n")
+      if (outputPath.contains(RedisClient.cluster)){
+        val jedisCluster = RedisClient.jedisCluster
+        jedisCluster.set("rcmd_topcategory_forenoon", morning)
+        jedisCluster.set("rcmd_topcategory_afternoon", noon)
+        jedisCluster.set("rcmd_topcategory_evening", evening)
+        Message.addMessage(s"\t上午:\n\t\t$morning\n")
+        Message.addMessage(s"\t中午:\n\t\t$noon\n")
+        Message.addMessage(s"\t晚上:\n\t\t$evening\n")
+      } else if (outputPath.contains(RedisClient.standalone)) {
+        val jedisCluster = RedisClient.pool.getResource
+        jedisCluster.set("rcmd_topcategory_forenoon", morning)
+        jedisCluster.set("rcmd_topcategory_afternoon", noon)
+        jedisCluster.set("rcmd_topcategory_evening", evening)
+        Message.addMessage(s"\t上午:\n\t\t$morning\n")
+        Message.addMessage(s"\t中午:\n\t\t$noon\n")
+        Message.addMessage(s"\t晚上:\n\t\t$evening\n")
+        jedisCluster.close()
+      } else {
+        logger.error("please input redis type: standalone or cluster")
+      }
     }
+
     logger.info("上午、下午、晚上购买类目计算结束。")
   }
 }
@@ -106,7 +123,6 @@ object BuyActivityConf  {
   val days = "n-days"
   val sdf = "dateFormat"
 
-
   val buyGoodsSimCommand = new MyCommandLine("buyActivity")
   buyGoodsSimCommand.addOption("i", input, true, "data.source", "hive")
   buyGoodsSimCommand.addOption("o", output, true, "output data to redis， hbase or HDFS", "redis-cluster")
@@ -118,8 +134,8 @@ object BuyActivityConf  {
   buyGoodsSimCommand.addOption("sdf", sdf, true, "date format", "yyyyMMdd")
   buyGoodsSimCommand.addOption("top", top, true, "top n goods", "20")
 
-  def parse(args: Array[String]): Map[String, String] ={
-    buyGoodsSimCommand.parser(args)
-  }
+  def parse(args: Array[String]): Map[String, String] = buyGoodsSimCommand.parser(args)
+
+  def printHelp = buyGoodsSimCommand.printHelper
 
 }

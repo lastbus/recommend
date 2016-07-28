@@ -12,7 +12,7 @@ import org.apache.hadoop.hbase.client.Get
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.kafka.clients.consumer.{KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
-import org.apache.log4j.{LogManager, Level}
+import org.apache.log4j.{Level, LogManager}
 import org.apache.spark.streaming.dstream.InputDStream
 import org.apache.spark.streaming.kafka.{HasOffsetRanges, KafkaUtils, OffsetRange}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
@@ -25,14 +25,15 @@ import scala.collection.mutable
 /**
  * Created by MK33 on 2016/5/25.
  */
-object DirectKafkaStreamingProcess extends StreamingLogger {
+object DirectKafkaStreamingProcess {
+
+  val logger = LogManager.getLogger(this.getClass.getName)
 
 
   def main(args: Array[String]) {
 
     logger.debug("==========  program start!  ==========")
-    LogManager.getRootLogger.setLevel(Level.WARN)
-
+//    LogManager.getRootLogger.setLevel(Level.WARN)
     val streamingProperties = new Properties()
     val classLoader = DirectKafkaStreamingProcess.getClass.getClassLoader
     val in = classLoader.getResourceAsStream("streaming.properties")
@@ -57,7 +58,7 @@ object DirectKafkaStreamingProcess extends StreamingLogger {
       println("no kafka properties found in kafka.properties")
       sys.exit(-1)
     }
-    val ssc = new StreamingContext(new SparkConf().setAppName("kafka-streaming-direct"), Seconds(2))
+    val ssc = new StreamingContext(new SparkConf(), Seconds(2))
     val topic = streamingProperties.getProperty("kafka.topic.subscribe").split(",").toSet
     val dStream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams.toMap, topic)
 
@@ -69,43 +70,31 @@ object DirectKafkaStreamingProcess extends StreamingLogger {
     }.map(_._2).foreachRDD {
       rdd =>
         offsetRanges.foreach { o =>
-          logger.debug(s"topic: ${o.topic}, partition: ${o.partition}, fromOffset: ${o.fromOffset}, untilOffset: ${o.untilOffset}") }
+          logger.debug(s"topic: ${o.topic}, partition: ${o.partition}, fromOffset: ${o.fromOffset}, untilOffset: ${o.untilOffset}")
+        }
+
         rdd.foreachPartition
         { partition =>
-            val conn = HBaseConnectionPool.connection
-            val table = conn.getTable(TableName.valueOf("kafka-streaming-test"))
-            val jedis = RedisClient.pool.getResource
             partition.foreach
             { item =>
-              try {
-                val json = new JSONObject(item)
-                val behaviorType = json.getString("actType")
-                val cookie = json.getString("cookieId")
-                val eventDate = json.getString("eventDate")
-                val goodsId = json.getString("goodsId")
-
-                if (behaviorType.equals("view")) {
-                  val get = new Get(Bytes.toBytes(cookie))
-                  val result = table.get(get)
-                  if (!result.isEmpty)
-                  {
-                    val memberID = new String(result.getValue(Bytes.toBytes("test"), Bytes.toBytes("cookie")))
-                    jedis.hmset("last_view_" + memberID, Map(goodsId -> eventDate))
-                    logger.debug(s"save to redis key: last_view_$memberID")
-                  } else {
-                    logger.debug(s"cookie: $cookie not found in hbase")
-                  }
-                } else {
-                  logger.info(item)
-                }
-
-              } catch {
-                case e: Exception => logger.debug(item)
-              }
+              logger.debug(item)
+//              try {
+//                val json = new JSONObject(item)
+//                val msgType = json.getString("actType").toLowerCase
+//                msgType match {
+//                  case "hotsale" => ViewHandler.handle(json)
+//                  case "dpgl" => ViewHandler.handle(json)
+//                  case "afpay" => logger.info(item)
+//                  case "pcgl" => PCGLHandler.handler(json)
+//                  case "gyl" => GYLHandler.handler(json)
+//                  case _ => logger.error("wrong message type: " + msgType)
+//                }
+//              } catch {
+//                case e: Exception => logger.error(s"$item : $e")
+//                case e0: Throwable => logger.error(s"super error $item : $e0")
+//              }
 
             }
-            table.close()
-            jedis.close()
       }
 
     }
@@ -113,6 +102,7 @@ object DirectKafkaStreamingProcess extends StreamingLogger {
 
     ssc.start()
     ssc.awaitTermination()
+
     logger.info("===============   graceful end  =================")
 
   }

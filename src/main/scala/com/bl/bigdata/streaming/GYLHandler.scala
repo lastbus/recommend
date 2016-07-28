@@ -15,24 +15,21 @@ import org.json.JSONObject
 object GYLHandler {
   val logger = LogManager.getLogger(this.getClass.getName)
 
-  val hTable = HBaseConnectionPool.connection.getTable(TableName.valueOf("recommend"))
+  val hTable = HBaseConnectionPool.connection.getTable(TableName.valueOf("rcmd_user_view"))
   val cal = Calendar.getInstance()
   val familyBytes = Bytes.toBytes("recommend")
   val columnBytes = Bytes.toBytes("gyl")
   val sdf = new SimpleDateFormat("yyyyMMdd")
 
   def handler(json: JSONObject): Unit = {
-    val memberID = json.getString("memberId")
+    val memberId = json.getString("memberId")
+    if (memberId == null || memberId.length == 0 || memberId.equalsIgnoreCase("NULL")) return
     val channel = json.getString("channel")
-    val eventDate = json.getString("eventDate").toLong
+    val eventDate = json.getString("eventDate")
     val goodsList = json.getJSONObject("recResult").getJSONArray("goodsList")
-
-    val date = sdf.format(new Date(eventDate))
-
-    val j = new JSONObject()
-    j.put("goodsList", goodsList)
-    val put = new Put(Bytes.toBytes(memberID.reverse + "-" + channel + "-" + date ))
-    put.addColumn(familyBytes, columnBytes, Bytes.toBytes(j.toString()))
+    val key = channel + "_" + memberId + "_" + eventDate
+    val put = new Put(Bytes.toBytes(key))
+    put.addColumn(familyBytes, columnBytes, Bytes.toBytes(goodsList.toString()))
     hTable.put(put)
 
   }

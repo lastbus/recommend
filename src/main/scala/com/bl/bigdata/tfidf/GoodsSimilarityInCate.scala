@@ -34,10 +34,23 @@ class GoodsSimilarityInCate extends Tool with Serializable {
   /** TF-IDF 的维度大小*/
   val featuresNum = 1 << 16
 
+  var optionMap: Map[String, String] = _
+
   override def run(args: Array[String]): Unit = {
+   optionMap = try {
+     GoodsSimInCateConf.parse(args)
+   } catch {
+     case e: Throwable =>
+       logger.error("parse command line error: " + e)
+       GoodsSimInCateConf.printlnHelp
+       return
+   }
+
     logger.info("同类商品属性的相似性开始计算.........")
     Message.addMessage("\n同类商品属性的相似性：\n")
-    val output = ConfigurationBL.get("recmd.output")
+
+    val in = optionMap(GoodsSimInCateConf.in)
+    val output = optionMap(GoodsSimInCateConf.out)
     val redis = output.contains("redis")
     val hbase = output.contains("hbase")
 
@@ -46,12 +59,18 @@ class GoodsSimilarityInCate extends Tool with Serializable {
     val columnName = ""
 
     val sc = SparkFactory.getSparkContext("同类商品属性相似度")
-    val sql = "select sid, mdm_goods_sid, category_id, brand_sid, sale_price, value_sid " +
-      " from recommendation.product_properties_raw_data"
+    val sql = "select p.sid, p.mdm_goods_sid, p.category_id, p.brand_sid, p.sale_price, p.value_sid, g.store_sid " +
+             " from recommendation.product_properties_raw_data p inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = p.sid "
 
-    val rawRDD =  ReadData.readHive(sc, sql).map{ case Array(goodsID, itemNo, category, band, price, attribute) =>
-                                                  (goodsID, itemNo, category, band, attribute, price) }
+    val sqlName = optionMap(GoodsSimInCateConf.sqlName)
+//    val rawRDD =  ReadData.readHive(sc, sql).map { case Array(goodsID, itemNo, category, band, price, attribute, storeId) =>
+//                                                  (goodsID, itemNo, category + "_" + storeId, band, attribute, price)
+//      }.distinct()
 
+    val rawRDD = DataBaseUtil.getData(in, sqlName).filter(s => s(0) != "null" && s(1) != "null" && s(2) != "null" && s(3) != "null"&& s(4) != "null" && s(5) != "null")
+                                  .map { case Array(goodsID, itemNo, category, band, price, attribute, storeId) =>
+                                         (goodsID, itemNo, category + "_" + storeId, band, attribute, price)
+                                  }.distinct()
 
     // 计算每个类别的商品价格分布，分为 5 份，假设每个类别的商品价格数大于 5 个。
     val categoryRDD = rawRDD.map { case (goodsID, itemNo, category, band, attribute, price) => (category, price) }
@@ -111,14 +130,13 @@ class GoodsSimilarityInCate extends Tool with Serializable {
 
     if (redis) {
       val accumulator = sc.accumulator(0)
-      val redisType = ConfigurationBL.get("redis.type")
+      val redisType = if (output.contains(RedisClient.cluster)) RedisClient.cluster else RedisClient.standalone
 //      saveToRedis(similarity, accumulator)
       RedisClient.sparkKVToRedis(similarity, accumulator, redisType)
       Message.addMessage(s"\t插入 redis rcmd_sim_* :  $accumulator\n ")
     }
 
     if (hbase) {
-      // save to hbase
       val hBaseConf = HBaseConfiguration.create()
       hBaseConf.set(TableOutputFormat.OUTPUT_TABLE, table)
       val job = Job.getInstance(hBaseConf)
@@ -195,4 +213,23 @@ object GoodsSimilarityInCate extends Serializable {
     val goodsSimilarity = new GoodsSimilarityInCate with  ToolRunner
     goodsSimilarity.run(args)
   }
+}
+
+
+object GoodsSimInCateConf {
+
+  val in = "input"
+  val out = "out"
+  val sqlName = "sql_name"
+
+  val commandLine = new MyCommandLine("GoodsSimilarityInCate")
+
+  commandLine.addOption("i", in, true, "input data source type", "hive")
+  commandLine.addOption("o", out, true, "output result", "redis-" + RedisClient.cluster)
+  commandLine.addOption("sql", sqlName, true, "sql name in hive.xml", "goods.similarity.in.cate")
+
+  def parse(args: Array[String]): Map[String, String] = commandLine.parser(args)
+
+  def printlnHelp = commandLine.printHelper
+
 }
