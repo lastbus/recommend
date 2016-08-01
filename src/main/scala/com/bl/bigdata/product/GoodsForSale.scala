@@ -31,7 +31,7 @@ class GoodsForSale extends Tool {
       val sc = SparkFactory.getSparkContext("goods.for.sale")
       val hiveContext = SparkFactory.getHiveContext
       toRedis1(hiveContext)
-      //toRedis2(hiveContext)
+//      toRedis2(hiveContext)
       category(hiveContext)
 
       logger.info("商品属性计算结束。")
@@ -43,7 +43,7 @@ class GoodsForSale extends Tool {
     val in = optionMap(GoodsForSaleConf.in)
     val prefix = optionMap(GoodsForSaleConf.pre_0)
     val prefix2 = optionMap(GoodsForSaleConf.pre_1)
-    val sql = "select sid, category_id, store_sid from recommendation.goods_avaialbe_for_sale_channel "
+    val sql = "select sid, category_id, store_sid from recommendation.goods_avaialbe_for_sale_channel  where sale_status = 4 and stock = 1  "
     val sqlName = optionMap(GoodsForSaleConf.sql_goods)
 //    val readRDD = hiveContext.sql(sql).rdd.map(row => if (row.anyNull) null else (row.getString(0), row.getLong(1).toString))
 //                                          .filter(_ != null).distinct()
@@ -73,7 +73,7 @@ class GoodsForSale extends Tool {
     }
     Message.addMessage(s"\t$prefix* : $count1Accumulator\n")
     Message.addMessage(s"\t插入 redis $prefix* : $count2Accumulator\n")
-    Message.addMessage(s"\t插入 $prefix2*: $count3Accumulator\n")
+    Message.addMessage(s"\t $prefix2*: $count3Accumulator\n")
     Message.addMessage(s"\t插入 $prefix2*: $count4Accumulator\n")
     logger.info("\t商品类别下面有哪些商品计算结束。")
   }
@@ -83,6 +83,7 @@ class GoodsForSale extends Tool {
     * on use temporary
     * @param hiveContext 读取 hive 表
     */
+  @Deprecated
   def toRedis2(hiveContext: HiveContext) = {
 
     val sql = "select sid, mdm_goods_sid, goods_sales_name, goods_type, pro_sid, brand_sid, " +

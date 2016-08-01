@@ -36,7 +36,7 @@ class BrowserNotBuy extends Tool {
 
     val sqlName = optionsMap(BrowserNotBuyConf.sql)
     val rawRDD = DataBaseUtil.getData(input, sqlName, start)
-    val a = rawRDD.filter(_.contains(null)).map { case Array(cookie, date, behavior, category, goods) =>
+    val a = rawRDD.filter(!_.contains("null")).map { case Array(cookie, date, behavior, category, goods) =>
                                                   ((cookie, date.substring(0, date.indexOf(" "))), behavior, (category, goods)) }
 
     val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000") }

@@ -6,6 +6,7 @@ import java.util.Date
 import com.bl.bigdata.util.{LoggerShutDown, MyCommandLine}
 import kafka.serializer.StringDecoder
 import org.apache.commons.cli.{BasicParser, HelpFormatter, Option, Options}
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.{Seconds, StreamingContext}
@@ -18,7 +19,7 @@ import scala.collection.mutable
 /**
  * Created by MK33 on 2016/5/30.
  */
-object RecommendStreaming extends StreamingLogger with LoggerShutDown {
+object RecommendStreaming extends StreamingLogger  {
 
   def main(args: Array[String]) {
     val optionMap = RecommendStreamingCommandParser.parse(args)
@@ -80,6 +81,15 @@ object RecommendStreaming extends StreamingLogger with LoggerShutDown {
     ssc.awaitTermination()
   }
 
+  def setSparkLoggerLevel(level: String): Unit = {
+    level match {
+      case "trace" => Logger.getRootLogger.setLevel(Level.TRACE)
+      case _ => Logger.getRootLogger.setLevel(Level.INFO)
+
+    }
+
+  }
+
 }
 
 
@@ -93,6 +103,7 @@ object RecommendStreamingCommandParser  {
   val writeAheadLog = "writeAheadLog"
   val checkpoint = "checkpoint"
   val debug = "debug"
+  val log = "logLevel"
 
   val options = new Options
   val commandLineParser = new MyCommandLine("streaming")
@@ -106,6 +117,7 @@ object RecommendStreamingCommandParser  {
   commandLineParser.addOption("w", writeAheadLog, true, "turn on spark streaming write ahead log", "true")
   commandLineParser.addOption("c", checkpoint, true, "spark streaming checkpoint path", "checkpoint/spark/recommend")
   commandLineParser.addOption("d", debug, true, "print received records number", "false")
+  commandLineParser.addOption("l", log, true, " spark log level", "WARN")
 
   def parse(args: Array[String]): Map[String, String] = {
     commandLineParser.parser(args)

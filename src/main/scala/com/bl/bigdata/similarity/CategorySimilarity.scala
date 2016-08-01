@@ -64,7 +64,7 @@ class CategorySimilarity extends Tool {
       val sql_test = "select category_id, level2_id from recommendation.dim_category"
       val sql2 = optionsMap(CategorySimConf.sql_2)
       val categoryRawData = DataBaseUtil.getData(input, sql2)
-      val categoriesRDD = categoryRawData.filter(!_.contains(null)).map{ case Array(category, level) => (category, level)}.distinct()
+      val categoriesRDD = categoryRawData.filter(!_.contains("null")).map{ case Array(category, level) => (category, level)}.distinct()
       // 将商品的末级类别用一级类别替换
       val buyGoodsKindRDD = buyGoodsRDD.join(categoriesRDD)
         .map { case (category, ((cookie, date, goodsID), kind)) => ((cookie, date, kind), category) }

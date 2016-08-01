@@ -44,9 +44,9 @@ class BuyGoodsSimilarity extends Tool{
     val behaviorRawDataRDD = DataBaseUtil.getData(optionsMap(BuyGoodsSimConf.input), optionsMap(BuyGoodsSimConf.sql_1), start)
 
     val sql = "select u.category_sid, u.cookie_id, u.event_date, u.behavior_type, u.goods_sid, g.store_sid " +
-      " from recommendation.user_behavior_raw_data u  inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid " +
+      " from recommendation.user_behavior_raw_data u  inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid and g.sale_status = 4  " +
       s"where u.dt >= $start"
-    val buyGoodsRDD = behaviorRawDataRDD.filter(a => a(0) != null && a(1) != null && a(2) != null && a(3) != null && a(4) != null)
+    val buyGoodsRDD = behaviorRawDataRDD.filter(a => a(0) != "null" && a(1) != "null" && a(2) != "null" && a(3) != "null" && a(4) != "null")
                               .map { case Array(category, cookie, date, behaviorId, goodsId, storeId) =>
                                             (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId, storeId)) }
                               .filter(_._2._3 == "4000")

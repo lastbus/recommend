@@ -35,7 +35,7 @@ class SeeBuyGoodsSimilarity extends Tool {
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
 
     val sql = "select u.cookie_id, u.category_sid, u.event_date, u.behavior_type, u.goods_sid, g.store_sid  " +
-      "from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid  " +
+      "from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid  and g.sale_status = 4 " +
       s"where u.dt >= $start"
     val sqlName = optionsMap(SeeBuyCommandLineParser.sql)
 
@@ -43,7 +43,7 @@ class SeeBuyGoodsSimilarity extends Tool {
     val accumulator2 = sc.accumulator(0)
 
     val rawData = DataBaseUtil.getData(input, sqlName, start)
-                              .filter(a => a(0) != null && a(1) != null && a(2) != null && a(3) != null && a(4) != null)
+                              .filter(a => a(0) != "null" && a(1) != "null" && a(2) != "null" && a(3) != "null" && a(4) != "null")
                               .map { case Array(cookie, category, date, behaviorId, goodsId, storeId) =>
                                             ((cookie, category, date.substring(0, date.indexOf(" ")), storeId), behaviorId, goodsId)
                               }

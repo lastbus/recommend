@@ -4,7 +4,7 @@
         <name>browser</name>
         <value>
             select u.cookie_id, u.category_sid, u.event_date, u.behavior_type, u.goods_sid, g.store_sid
-            from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid
+            from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid and g.sale_status = 4
             where dt &gt;= '%s'
         </value>
     </sql>
@@ -12,7 +12,7 @@
         <name>see.buy</name>
         <value>
             select u.cookie_id, u.category_sid, u.event_date, u.behavior_type, u.goods_sid, g.store_sid
-            from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid
+            from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid and g.sale_status = 4
             where u.dt &gt;= '%s'
         </value>
     </sql>
@@ -40,7 +40,7 @@
         <name>buy.goods.sim-1</name>
         <value>
             select u.category_sid, u.cookie_id, u.event_date, u.behavior_type, u.goods_sid, g.store_sid
-            from recommendation.user_behavior_raw_data u  inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid
+            from recommendation.user_behavior_raw_data u  inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid  and g.sale_status = 4
             where u.dt &gt;= '%s'
         </value>
     </sql>
@@ -120,7 +120,7 @@
 
     <sql>
         <name>goods.for.sale</name>
-        <value>select sid, category_id, store_sid from recommendation.goods_avaialbe_for_sale_channel </value>
+        <value>select sid, category_id, store_sid from recommendation.goods_avaialbe_for_sale_channel where sale_status = 4 and stock = 1 </value>
     </sql>
 
     <sql>
@@ -129,5 +129,10 @@
             select p.sid, p.mdm_goods_sid, p.category_id, p.brand_sid, p.sale_price, p.value_sid, g.store_sid
             from recommendation.product_properties_raw_data p inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = p.sid
         </value>
+    </sql>
+
+    <sql>
+        <name>merchant.shop.goods</name>
+        <value>select sid, store_sid  from recommendation.goods_avaialbe_for_sale_channel where store_sid &lt;&gt; 'null' and  sale_status = 4 and stock = 1 </value>
     </sql>
 </configuration>

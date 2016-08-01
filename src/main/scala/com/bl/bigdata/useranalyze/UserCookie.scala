@@ -9,6 +9,7 @@ import org.apache.spark.rdd.RDD
 /**
   * Created by MK33 on 2016/4/11.
   */
+@Deprecated
 class UserCookie extends Tool {
 
   override def run(args: Array[String]): Unit = {
