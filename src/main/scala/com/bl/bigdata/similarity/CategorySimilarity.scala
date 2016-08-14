@@ -100,7 +100,7 @@ class CategorySimilarity extends Tool {
 
 object CategorySimilarity {
 
-  def main(args: Array[String]): Unit ={
+  def main(args: Array[String]): Unit = {
     execute(args)
   }
 

@@ -3,6 +3,7 @@ package com.bl.bigdata.user
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.bl.bigdata.streaming.StreamingLogger
 import com.bl.bigdata.util.SparkFactory
 import org.apache.hadoop.hbase.client.{HTable, Put}
 import org.apache.hadoop.hbase.util.Bytes

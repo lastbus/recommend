@@ -6,7 +6,7 @@ import java.util.{Calendar, Date}
 import org.apache.hadoop.hbase.TableName
 import org.apache.hadoop.hbase.client.Put
 import org.apache.hadoop.hbase.util.Bytes
-import org.apache.log4j.LogManager
+import org.apache.logging.log4j.LogManager
 import org.json.JSONObject
 
 /**
@@ -31,7 +31,7 @@ object GYLHandler {
     val put = new Put(Bytes.toBytes(key))
     put.addColumn(familyBytes, columnBytes, Bytes.toBytes(goodsList.toString()))
     hTable.put(put)
-
+    logger.info(s"hbase key: ${key}")
   }
 
   def main(args: Array[String]) {

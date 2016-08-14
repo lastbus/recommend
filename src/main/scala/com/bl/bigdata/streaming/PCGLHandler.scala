@@ -6,12 +6,15 @@ import java.util.{Calendar, Date}
 import org.apache.hadoop.hbase.TableName
 import org.apache.hadoop.hbase.client.{Put, Table}
 import org.apache.hadoop.hbase.util.Bytes
+import org.apache.logging.log4j.LogManager
 import org.json.JSONObject
 
 /**
   * Created by MK33 on 2016/7/5.
   */
 object PCGLHandler {
+
+  val logger = LogManager.getLogger(this.getClass.getName)
 
   lazy val hTable: Table = HBaseConnectionPool.connection.getTable(TableName.valueOf("rcmd_user_view"))
   val cal = Calendar.getInstance()
@@ -21,7 +24,9 @@ object PCGLHandler {
 
   def handler(json: JSONObject): Unit = {
     val memberId = json.getString("memberId")
-    if (memberId == null || memberId.length == 0 || memberId.equalsIgnoreCase("NULL")) return
+    if (memberId == null || memberId.length == 0 || memberId.equalsIgnoreCase("NULL")) {
+      return
+    }
     val eventDate = json.getString("eventDate")
     val channel = json.getString("channel")
     val recResult = json.getJSONObject("recResult").getJSONArray("goodsList")
@@ -29,6 +34,7 @@ object PCGLHandler {
     val put = new Put(Bytes.toBytes(key))
     put.addColumn(columnFamilyBytes, columnBytes, Bytes.toBytes(recResult.toString()))
     hTable.put(put)
+    logger.info(s"HBase key :  ${key} ")
   }
 
 

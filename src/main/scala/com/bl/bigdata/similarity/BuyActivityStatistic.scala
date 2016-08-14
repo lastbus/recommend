@@ -47,9 +47,9 @@ class BuyActivityStatistic extends Tool {
 
     val sql_1 = optionsMap(BuyActivityConf.sql_1)
     val userRawDataRDD = DataBaseUtil.getData(input, sql_1, start)
-    val rawRDD = userRawDataRDD.map{ case Array(category, date1, behavior) =>
+    val rawRDD = userRawDataRDD.filter(!_.contains("null")).map{ case Array(category, date1, behavior) =>
                                     (category, date1.substring(date1.indexOf(" ") + 1), behavior)}
-                          .filter{ case (category, time, behavior) => behavior.equals("4000") && !category.equalsIgnoreCase("NULL")}
+                          .filter{ case (category, time, behavior) => category != null && behavior != null && behavior.equals("4000") }
                           .map{ case (category, time, behavior) => (category, time)}
 
     // 统计上午、下午、晚上 购买类目top 10

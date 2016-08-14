@@ -62,6 +62,9 @@ object DirectKafkaStreamingProcess {
     val topic = streamingProperties.getProperty("kafka.topic.subscribe").split(",").toSet
     val dStream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams.toMap, topic)
 
+
+
+
     var offsetRanges = Array[OffsetRange]()
 
     dStream.transform { rdd =>
@@ -97,11 +100,13 @@ object DirectKafkaStreamingProcess {
             }
       }
 
+
     }
 
 
     ssc.start()
     ssc.awaitTermination()
+
 
     logger.info("===============   graceful end  =================")
 

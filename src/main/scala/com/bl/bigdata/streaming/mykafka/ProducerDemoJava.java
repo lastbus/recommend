@@ -29,7 +29,6 @@ public class ProducerDemoJava {
                     if (exception != null) {
                         System.out.println(exception);
                     }
-
                 }
             });
             Thread.sleep(1000);

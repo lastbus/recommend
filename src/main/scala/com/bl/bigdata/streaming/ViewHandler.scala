@@ -1,13 +1,12 @@
 package com.bl.bigdata.streaming
 
 import java.text.SimpleDateFormat
-import java.util.Date
 
 import com.bl.bigdata.util.RedisClient
 import org.apache.hadoop.hbase.TableName
 import org.apache.hadoop.hbase.client.{Get, Put, Table}
 import org.apache.hadoop.hbase.util.Bytes
-import org.apache.log4j.LogManager
+import org.apache.logging.log4j.LogManager
 import org.json.JSONObject
 
 import scala.collection.JavaConversions._

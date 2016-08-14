@@ -70,7 +70,7 @@ object MerchantShopGoodsConf  {
   commandLineParser.addOption("i", input, true, "input data source", "hive")
   commandLineParser.addOption("o", output, true, "output data destination", "redis-" + RedisClient.cluster)
   commandLineParser.addOption("s", sqlName, true, "sql name in hive.xml file", "merchant.shop.goods")
-  commandLineParser.addOption("p", prefix, true, "redis key prefix", "rcmd_store_")
+  commandLineParser.addOption("p", prefix, true, "redis key prefix", "rcmd_store_goods_")
   commandLineParser.addOption("d", delimiter, true, "goods_id delimiter", "#")
 
   def parse(args: Array[String]): Map[String, String] = commandLineParser.parser(args)

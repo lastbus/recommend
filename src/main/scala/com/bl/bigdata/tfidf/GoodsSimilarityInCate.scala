@@ -123,7 +123,7 @@ class GoodsSimilarityInCate extends Tool with Serializable {
         bsv1.dot(bsv2).asInstanceOf[Double] / (norm(bsv1) * norm(bsv2))
       }
       (id1, (id2, cosSim))
-    }.filter { case (id1, (id2, cosSim)) => cosSim > 0.0 } // 相似度低的过滤
+    }.filter { case (id1, (id2, cosSim)) => id1 != id2 }
       .map { case (id1, (id2, cosSim)) => (id1, Seq((id2, cosSim))) }
       .reduceByKey((s1, s2) => s1 ++ s2)
       .map { case (id1, seq) => ("rcmd_sim_" + id1, seq.sortWith((seq1, seq2) => seq1._2 > seq2._2).take(20).map(_._1).mkString("#"))}

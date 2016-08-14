@@ -40,7 +40,7 @@ object ProducerDemo {
         case e: Throwable => println(e.getMessage)
       }
       println("send " + i + " to " + url + " : " + topic)
-      Thread.sleep(500)
+      Thread.sleep(1000)
     }
 
     producer.close()
