@@ -5,7 +5,8 @@ package com.bl.bigdata.config
  */
 object HbaseConfig {
 
-  val test = true
+  val test = false
+
   var  hbase_zookeeper_property_clientPort:String = "2181"
   var  hbase_zookeeper_quorum:String =  "slave23.bl.bigdata,slave24.bl.bigdata,slave21.bl.bigdata"
   var  hbase_master = "10.201.48.27:60000"

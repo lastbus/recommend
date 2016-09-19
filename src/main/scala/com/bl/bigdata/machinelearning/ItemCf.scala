@@ -9,9 +9,9 @@ import org.apache.spark.sql.hive.HiveContext
 /**
  * Created by HJT20 on 2016/6/13.
  */
-class UserCF {
-  def usertaste( day:Int, pts:Int): Unit = {
-    val sc = SparkFactory.getSparkContext("user_cf")
+class ItemCF {
+  def usertaste(day:Int): Unit = {
+    val sc = SparkFactory.getSparkContext("item_cf")
     val hiveContext = new HiveContext(sc)
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date0 = new Date
@@ -49,24 +49,23 @@ class UserCF {
       val mId=x._1._1
       x._2.take(30).map(y=>(mId,(y._1,y._2)))
 
-    }).cache()
-
-
-    val trainRDD = prefRdd.map { case (mId, (pId, rating)) =>
-      (mId, Map(pId.toString -> rating.toDouble))
-    }.reduceByKey(_ ++ _)
-
-
-    val randIndexRdd = trainRDD.map(user=>{
-      val nkey = scala.util.Random.nextInt(pts)
-      (nkey,user)
     })
-    val partUserRdd = randIndexRdd.join(randIndexRdd).mapValues(u=>Seq(u)).reduceByKey( _ ++ _)
-      .flatMapValues(us=>{us.union(us)
-      })
+   // prefRdd.saveAsTextFile("/home/hdfs/prefRdd")
 
-    val tmpUpRdd = partUserRdd
-      .map(kv=>kv._2).map {
+//    val purRdd = prefRdd.map { case (mId, (pId, rating)) =>
+//      (pId, Map(mId -> rating.toDouble))
+//    }.reduceByKey(_ ++ _)
+
+
+    val purRdd2 = prefRdd.map { case (mId, (pId, rating)) =>
+      (pId, (mId, rating.toDouble))
+    }
+
+    val purRdd = purRdd2.mapValues{case(mId,rating)=>Map(mId->rating)}.reduceByKey(_ ++ _)
+
+
+    val ppRdd = purRdd.cartesian(purRdd)
+    val tmpUpRdd = ppRdd.map {
       case (ud1, ud2) =>
         val id1 = ud1._1
         val id2 = ud2._1
@@ -82,33 +81,37 @@ class UserCF {
         }
         val divider2 = d2.map(s => s._2 * s._2).sum
         (id1, (id2, sum / (scala.math.sqrt(divider1) * scala.math.sqrt(divider2))))
-    }.filter(s => s._2._2.toDouble > 0.00001 && s._1 != s._2._1).mapValues(v => Seq(v))
-      .reduceByKey(_ ++ _).distinct().mapValues(v => v.sortWith((a, b) => a._2 > b._2)).mapValues(v => v.take(50))
+    }.filter(s => s._2._2.toDouble > 0.000001 && s._1 != s._2._1).mapValues(v => Seq(v))//距离小还是大
+      .reduceByKey(_ ++ _).distinct().mapValues(v => v.sortWith((a, b) => a._2 > b._2)).mapValues(v => v.take(10)).cache()
 
-    val nbsRdd = tmpUpRdd.flatMap(x => {
-      val mId1 = x._1
-      val nbs = x._2
-      nbs.map(y => ((y._1, (y._2, mId1))))
-    }).join(prefRdd)
-      .map { case (nb, ((sim, uId), (pId, deg))) => {
-        (uId, (pId, (sim * deg)))
-      }
-      }.mapValues(v => Seq(v)).reduceByKey(_ ++ _).mapValues(v => v.sortWith((a, b) => a._2 > b._2).take(80))
+   // tmpUpRdd.saveAsTextFile("/home/hdfs/itecf")
+
+    val pupRdd = purRdd2.join(tmpUpRdd)
+      .flatMap{x=>{
+      val uId = x._2._1._1
+      val deg = x._2._1._2.toDouble
+      x._2._2.map{case(pId,rate)=>
+      {
+        (uId,(pId,rate*deg))
+      }}
+    }}.mapValues(pd=>Seq(pd)).reduceByKey(_ ++ _).mapValues(v => v.sortWith((a, b) => a._2 > b._2).take(60))
       .map(v => {
-        val pds = v._2
-        val spds = pds.map(x =>
-          x._1
-        ).distinct.mkString("#")
-        val mId = v._1
-        (mId, spds)
-      }
+
+                val pds = v._2
+                val spds = pds.map(x =>
+                  x._1
+                ).distinct.mkString("#")
+                val mId = v._1
+                (mId, spds)
+              }
       )
-    nbsRdd.foreachPartition(partition => {
+   // pupRdd.saveAsTextFile("/home/hdfs/pupRdd")
+
+    pupRdd.foreachPartition(partition => {
       try {
         val jedisCluster = RedisClient.jedisCluster
         partition.foreach(data => {
-          println("rcmd_usercf_"+data._1)
-          jedisCluster.set("rcmd_usercf_"+data._1, data._2)
+          jedisCluster.set("rcmd_itemcf_"+data._1, data._2)
         })
         //        jedisCluster.close()
       } catch {
@@ -118,16 +121,12 @@ class UserCF {
     })
     sc.stop()
   }
-
-
-
 }
 
-object UserCF {
+object ItemCF {
   def main(args: Array[String]) {
     val day = args(0).toInt
-    val pts = args(1).toInt
-    val uf = new UserCF
-    uf.usertaste(day,pts)
+    val itcf = new ItemCF
+    itcf.usertaste(day)
   }
 }

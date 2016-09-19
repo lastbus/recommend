@@ -11,22 +11,25 @@ class GoodsOffShelf {
     val sc = SparkFactory.getSparkContext("offShelf")
     val hiveContext = new HiveContext(sc)
     val sql = "select goods_sid,channel_sid from recommendation.goods_off_shelf"
-    val gRdd = hiveContext.sql(sql).rdd.map(row =>(row.getString(0),row.getString(1).toInt))
+    val gRdd = hiveContext.sql(sql).rdd.map(row => (row.getString(0), row.getString(1).toInt))
     gRdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
+     //val jedis = RedisClient.pool.getResource
+      val jedisCluster =  RedisClient.jedisCluster
       partition.foreach(s => {
         //3 PC
-        if(s._2 == 3) {
-          jedis.del("rcmd_orig_pc_" + s._1)
+        if (s._2 == 3) {
+          jedisCluster.del("rcmd_orig_pc_" + s._1)
         }
-          //1app
-        else if(s._2 ==1)
-        {
-            jedis.del("rcmd_orig_app_" + s._1)
+        //1app
+        else if (s._2 == 1) {
+          jedisCluster.del("rcmd_orig_app_" + s._1)
+        }
+        else if (s._2 == 2) {
+          jedisCluster.del("rcmd_orig_h5_" + s._1)
         }
 
       })
-      jedis.close()
+      //jedisCluster.close()
     })
     sc.stop();
   }
@@ -34,7 +37,7 @@ class GoodsOffShelf {
 
 object GoodsOffShelf {
   def main(args: Array[String]) {
-    val gp  = new GoodsOffShelf
+    val gp = new GoodsOffShelf
     gp.offShelf()
   }
 }

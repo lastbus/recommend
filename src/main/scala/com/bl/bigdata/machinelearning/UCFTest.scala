@@ -9,13 +9,13 @@ import org.apache.spark.sql.hive.HiveContext
 /**
  * Created by HJT20 on 2016/6/13.
  */
-class UserCF {
-  def usertaste( day:Int, pts:Int): Unit = {
+class UCFTest {
+  def usertaste(): Unit = {
     val sc = SparkFactory.getSparkContext("user_cf")
     val hiveContext = new HiveContext(sc)
     val sdf = new SimpleDateFormat("yyyyMMdd")
     val date0 = new Date
-    val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * day))
+    val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * 10))
     val sql = "select member_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start and behavior_type=1000 and member_id is not null and  member_id <>'null' and member_id <>'NULL' and member_id <>''"
     //ck,date,category,goods_sid=>1
@@ -49,8 +49,7 @@ class UserCF {
       val mId=x._1._1
       x._2.take(30).map(y=>(mId,(y._1,y._2)))
 
-    }).cache()
-
+    })
 
     val trainRDD = prefRdd.map { case (mId, (pId, rating)) =>
       (mId, Map(pId.toString -> rating.toDouble))
@@ -58,9 +57,11 @@ class UserCF {
 
 
     val randIndexRdd = trainRDD.map(user=>{
-      val nkey = scala.util.Random.nextInt(pts)
+      val nkey = scala.util.Random.nextInt(30)
       (nkey,user)
     })
+    //    randIndexRdd.foreach(println)
+    // (12,((717,Map(96969 -> 0.7737809374999998)),(119,Map(68370 -> 0.19344523437499994))))
     val partUserRdd = randIndexRdd.join(randIndexRdd).mapValues(u=>Seq(u)).reduceByKey( _ ++ _)
       .flatMapValues(us=>{us.union(us)
       })
@@ -83,7 +84,7 @@ class UserCF {
         val divider2 = d2.map(s => s._2 * s._2).sum
         (id1, (id2, sum / (scala.math.sqrt(divider1) * scala.math.sqrt(divider2))))
     }.filter(s => s._2._2.toDouble > 0.00001 && s._1 != s._2._1).mapValues(v => Seq(v))
-      .reduceByKey(_ ++ _).distinct().mapValues(v => v.sortWith((a, b) => a._2 > b._2)).mapValues(v => v.take(50))
+      .reduceByKey(_ ++ _).distinct().mapValues(v => v.sortWith((a, b) => a._2 < b._2)).mapValues(v => v.take(50))
 
     val nbsRdd = tmpUpRdd.flatMap(x => {
       val mId1 = x._1
@@ -120,14 +121,11 @@ class UserCF {
   }
 
 
-
 }
 
-object UserCF {
+object UCFTest {
   def main(args: Array[String]) {
-    val day = args(0).toInt
-    val pts = args(1).toInt
-    val uf = new UserCF
-    uf.usertaste(day,pts)
+    val uf = new UCFTest
+    uf.usertaste()
   }
 }
