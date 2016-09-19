@@ -12,6 +12,7 @@ import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
+import org.apache.logging.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.json.{JSONArray, JSONObject}
 

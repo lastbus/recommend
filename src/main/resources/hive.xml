@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <sql>
+        <name>browser</name>
+        <value>select cookie_id, category_sid, event_date, behavior_type, goods_sid from recommendation.user_behavior_raw_data  where dt &gt;= '%s'</value>
+    </sql>
+    <sql>
+        <name>see.buy</name>
+        <value>select cookie_id, category_sid, event_date, behavior_type, goods_sid  from recommendation.user_behavior_raw_data where dt &gt;= '%s'</value>
+    </sql>
+    <sql>
+        <name>search.category.0</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+                    g.brand_sid, g.pro_sid
+            FROM idmdata.dim_search_category c
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '%s' </value>
+    </sql>
+
+    <sql>
+        <name>search.category.1</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+                    g.brand_sid, g.pro_sid, n.sale_cum_amount, n.index_type
+            FROM idmdata.m_sr_eg_goods_num_amount n
+            INNER JOIN idmdata.dim_search_category c ON c.goods_sid = n.goods_code
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON g.sid = n.goods_code AND g.dt = '%s'
+            where n.cdate = '%s'
+        </value>
+    </sql>
+    <sql>
+        <name>buy.goods.sim-1</name>
+        <value>
+            select category_sid, cookie_id, event_date, behavior_type, goods_sid
+            from recommendation.user_behavior_raw_data
+            where dt &gt;= '%s'
+        </value>
+    </sql>
+    <sql>
+        <name>buy.goods.sim-2</name>
+        <value>select category_id, level2_id from recommendation.dim_category</value>
+    </sql>
+    <sql>
+        <name>user.behavior.raw.data</name>
+        <value>
+            select category_sid, cookie_id, event_date, behavior_type, goods_sid
+            from recommendation.user_behavior_raw_data
+            where dt &gt;= '%s'
+        </value>
+    </sql>
+    <sql>
+        <name>dim.category</name>
+        <value>select category_id, level2_id from recommendation.dim_category</value>
+    </sql>
+    <sql>
+        <name>buy.activity.statistic</name>
+        <value>select category_sid, event_date, behavior_type from recommendation.user_behavior_raw_data  where dt &gt;= %s</value>
+    </sql>
+
+    <sql>
+        <name>browser.not.buy</name>
+        <value>
+            select cookie_id, event_date, behavior_type, category_sid, goods_sid
+            from recommendation.user_behavior_raw_data
+            where dt &gt;= %s
+        </value>
+    </sql>
+    <sql>
+        <name>hot.sale</name>
+        <value>select goods_sid, goods_name, quanlity, event_date, category_sid  from recommendation.user_behavior_raw_data where dt &gt;= %s</value>
+    </sql>
+
+    <sql>
+        <name>search.category.score.spu</name>
+        <value>
+           SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+                   g.brand_sid, g.pro_sid
+           FROM idmdata.dim_search_category c
+           INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '%s'
+           where isnotnull(g.brand_sid) and g.brand_sid  &lt;&gt; 'null'
+        </value>
+    </sql>
+
+    <sql>
+        <name>search.category.score.sell</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+                    g.brand_sid, g.pro_sid, n.sale_cum_amount, n.index_type
+            FROM idmdata.m_sr_eg_goods_num_amount n
+            INNER JOIN idmdata.dim_search_category c ON c.goods_sid = n.goods_code
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON g.sid = n.goods_code AND g.dt = '%s'
+            where n.cdate = '%s'  and (isnotnull(g.brand_sid) and g.brand_sid &lt;&gt; 'null')
+        </value>
+    </sql>
+</configuration>

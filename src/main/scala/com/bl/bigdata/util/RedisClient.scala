@@ -6,6 +6,7 @@ import java.util.Properties
 import scala.collection.JavaConversions._
 import com.bl.bigdata.mail.Message
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig
+import org.apache.logging.log4j.LogManager
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 import redis.clients.jedis.{HostAndPort, JedisCluster, JedisPool}
@@ -14,25 +15,30 @@ import redis.clients.jedis.{HostAndPort, JedisCluster, JedisPool}
 /**
   * Created by MK33 on 2016/4/7.
   */
-object RedisClient extends Serializable with Logging with Redis {
+object RedisClient extends Serializable {
+  val logger = LogManager.getLogger(this.getClass.getName)
 
-  val conf = new GenericObjectPoolConfig
-  conf.setMaxTotal(100)
-  lazy val pool = new JedisPool(conf, host, port, timeout)
+  lazy val pool = {
+    val conf = new GenericObjectPoolConfig
+    conf.setMaxTotal(100)
+    val properties = new Properties()
+    properties.load(this.getClass.getClassLoader.getResourceAsStream("redis.properties"))
+    val host = properties.getProperty("redis.host")
+    val port = properties.getProperty("redis.port").toInt
+    val timeout = properties.getProperty("redis.timeout").toInt
+    sys.addShutdownHook(jedisHook.run())
+    new JedisPool(conf, host, port, timeout)
+  }
+
   lazy val jedisCluster = {
     val properties = new Properties()
-    properties.load(this.getClass.getClassLoader.getResourceAsStream("jedis-cluster.properties"))
+    properties.load(this.getClass.getClassLoader.getResourceAsStream("redis-cluster.properties"))
     val sets = new util.HashSet[HostAndPort]()
     for (key <- properties.stringPropertyNames()) {
       val value = properties.getProperty(key).split(":")
       sets.add(new HostAndPort(value(0), value(1).toInt))
     }
-//    set.add(new HostAndPort("10.201.129.74", 6379))
-//    set.add(new HostAndPort("10.201.129.75", 6379))
-//    set.add(new HostAndPort("10.201.129.80", 6379))
-//    set.add(new HostAndPort("10.201.129.74", 7000))
-//    set.add(new HostAndPort("10.201.129.75", 7000))
-//    set.add(new HostAndPort("10.201.129.80", 7000))
+    sys.addShutdownHook(jedisClusterHook2.run())
     new JedisCluster(sets)
   }
 
@@ -52,7 +58,7 @@ object RedisClient extends Serializable with Logging with Redis {
               jedis.set(s._1, s._2)
               accumulator += 1
             }
-            jedis.close()
+            jedis.close() // must release connection resource !
           case _ => logger.error(s"wrong redis type $redisType ")
         }
       } catch {
@@ -61,22 +67,18 @@ object RedisClient extends Serializable with Logging with Redis {
     })
   }
 
-  val jedisHook = new Thread {
+  val jedisHook: Thread = new Thread {
     override def run() = {
-      logger.info("==========  shutdown jedis  " + this  + "  =================")
+      logger.info("==========  shutdown jedis connection  =================")
       if (pool != null) pool.destroy()
     }
   }
 
-  val jedisClusterHook2 = new Thread {
+  val jedisClusterHook2: Thread = new Thread {
     override def run() = {
       logger.info("=======  shutdown jedis cluster connection  ============")
       if (jedisCluster != null) jedisCluster.close()
     }
   }
-
-
-  sys.addShutdownHook(jedisHook.run())
-  sys.addShutdownHook(jedisClusterHook2.run())
 
 }

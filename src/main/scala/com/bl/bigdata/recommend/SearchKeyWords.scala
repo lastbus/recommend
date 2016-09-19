@@ -5,7 +5,7 @@ import java.net.URLDecoder
 import com.bl.bigdata.util.{RedisClient, SparkFactory}
 import com.rockymadden.stringmetric.similarity.LevenshteinMetric
 import org.apache.spark.sql.hive.HiveContext
-
+import java.sql.{Statement, DriverManager, PreparedStatement, Connection}
 /**
  * Created by HJT20 on 2016/5/3.
  */
@@ -15,13 +15,52 @@ class SearchKeyWords {
     val sc = SparkFactory.getSparkContext("search_hot_words")
     val hiveContext = new HiveContext(sc)
     val sql = "select onsite_search_word from recommendation.search_hot_keywords"
-    val hotWords = hiveContext.sql(sql).rdd.map(row => row.getString(0)).collect()
+    val hotWords = hiveContext.sql(sql).rdd.map(row => row.getString(0).trim.toLowerCase).collect()
     val words = hotWords.mkString("#")
     val jedisCluster = RedisClient.jedisCluster
     jedisCluster.set("search_index_hotwords", words)
+
+
+    val hivesql = "select * from recommendation.search_hot_keywords"
+    val mysqlHotWords = hiveContext.sql(hivesql).rdd.map(row => (row.getString(0).trim.toLowerCase,row.getLong(1))).collect()
+
+
+    var conn: Connection = null
+    var statement:Statement = null
+    var ps: PreparedStatement = null
+    val empSql = "delete from natural_hotwords"
+    val msql = "insert into natural_hotwords(keyword, channel,pagetype,searchTimes,selected) values (?,'3','index',?,1)"
+    try {
+      Class.forName("com.mysql.jdbc.Driver")
+      conn = DriverManager.getConnection("jdbc:mysql://10.201.48.3:3306/recommend_system", "bl", "bigdata")
+      statement = conn.createStatement()
+      statement.executeUpdate(empSql)
+      mysqlHotWords.foreach(dataIn => {
+        ps = conn.prepareStatement(msql)
+        ps.setString(1, dataIn._1)
+        ps.setInt(2, dataIn._2.toInt)
+        ps.executeUpdate()
+      }
+      )
+    } catch {
+      case e: Exception => e.printStackTrace()
+    } finally {
+      if(statement != null)
+        {
+          statement.close()
+        }
+      if (ps != null) {
+        ps.close()
+      }
+      if (conn != null) {
+        conn.close()
+      }
+    }
+
   //  jedisCluster.close()
   //  sc.stop()
   }
+
 
   def categoryWords(): Unit = {
     val sc = SparkFactory.getSparkContext("term_category")

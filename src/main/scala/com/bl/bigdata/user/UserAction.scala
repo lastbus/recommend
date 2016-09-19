@@ -31,27 +31,80 @@ class UserAction {
     val catesRdd  = hiveContext.sql(catesSql).rdd.map(row=>((row.getString(0), row.getString(1)),row.getLong(2)))
     //((102564,2016-04-16),((88867259525614535970958,1),3))
     val unormRdd = ucAcuRdd.join(catesRdd)
-    //unormRdd.saveAsTextFile("/home/hdfs/unormRdd")
-    //((103466,(21021460629373192854469,4)),0.18402591023557582,33,2016-04-14)
     val prefRdd = unormRdd.map(x=>{
       val sdf = new SimpleDateFormat("yyyy-MM-dd")
       val today = sdf.format(new Date)
       val b=sdf.parse(today).getTime-sdf.parse(x._1._2).getTime
       val num=b/(1000*3600*24)
-      //(goods_sid,mId)
+      //(category_sid,mId)
       ((x._1._1,x._2._1._1),((x._2._1._2.toDouble/x._2._2)*scala.math.pow(0.75,num)))})
-    .reduceByKey( _  + _).filter(_._2 > 0.001)
-      .map(u=>{
-      (u._1._2,Seq((u._1._1,u._2)))
-    }).reduceByKey(_ ++ _)
-      .mapValues(x=>{
-            x.sortWith((a,b)=>a._2>b._2)
-          }).mapValues(lt=>lt.map{case(x,y)=>x+":"+y}.mkString("#"))
+    .reduceByKey( _  + _).filter(_._2 > 0.00001)
+    .map(u=>
+    {
+      (u._1._2,(u._1._1,u._2))
+    })
 
-    //prefRdd.saveAsTextFile("/home/hdfs/pref")
-    prefRdd.foreachPartition(partition => {
+
+    //购买行为
+    val shopsql = "select member_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
+      s"where dt >= $start and behavior_type=4000 and member_id is not null and  member_id <>'null' and member_id <>'NULL' and member_id <>''"
+    //memberId,date,category,goods_sid=>1
+    //购买周期
+    //category_sid,member_id,date
+    val cbcRawRdd  = hiveContext.sql(shopsql).rdd.map(row=>((row.getString(3),row.getString(0)),(row.getString(1).substring(0,10))))
+    val udcRdd = cbcRawRdd.mapValues(x=>Seq(x)).reduceByKey( _ ++ _).mapValues(x=>x.distinct.sorted).filter(_._2.size>1)
+    val ccsRdd = udcRdd.mapValues(x=>
+    {
+      val ax = x.toArray
+      val sdf = new SimpleDateFormat("yyyy-MM-dd")
+      val cycle = for(i<-0 until  ax.length-1) yield (sdf.parse(ax(i+1)).getTime-sdf.parse(ax(i)).getTime)/(1000*3600*24)
+      cycle
+    }).map(x=>{(x._1._1,x._2)}).reduceByKey(_ ++ _)
+
+    val cmedRdd = ccsRdd.mapValues(x=>{
+      val sx = x.sorted
+      val count = sx.length
+      val median: Double = if (count % 2 == 0) {
+        val l = count / 2 - 1
+        val r = l + 1
+        (sx(l) + sx(r)).toDouble / 2
+      } else sx(count / 2).toInt
+      median
+    })
+    //category_sid,member_id,date
+    val shopRdd = cbcRawRdd.mapValues(x=>Seq(x)).reduceByKey( _ ++ _).mapValues(x=>x.distinct.sorted.last)
+
+    val shopCycRdd = shopRdd.map{case((category,memberId),date)=>(category,(memberId,date))}.leftOuterJoin(cmedRdd)
+    .map{case(category,((memberId,date),median))=>
+    {
+      val sdf = new SimpleDateFormat("yyyy-MM-dd")
+      val today = sdf.format(new Date)
+      val b=sdf.parse(today).getTime-sdf.parse(date).getTime
+      val num=b/(1000*3600*24)
+      var weight:Double = 0
+      if(median.isEmpty)
+        {
+          weight = 1
+        }
+      else
+      {
+        weight = 1/(1+Math.exp(Math.abs(median.get - num.toInt).toDouble))
+      }
+
+      (memberId,(category, (2*weight)))
+    }}
+
+    val userRdd =  prefRdd.union(shopCycRdd).map{case(memberId,(category,degree))=>
+      ((memberId,category),degree)
+    }.reduceByKey(_ + _).map { case ((memberId, category), degree) =>
+      (memberId,(category,degree))
+    }.mapValues(v=>Seq(v)).reduceByKey(_ ++ _)
+  .mapValues(x=>{
+                x.sortWith((a,b)=>a._2>b._2)
+              }).mapValues(lt=>lt.map{case(x,y)=>x+":"+y}.mkString("#"))
+
+    userRdd.foreachPartition(partition => {
       val jedis = RedisClient.jedisCluster
-      //val jedis = new Jedis("10.201.48.13", 6379);
       partition.foreach(s => {
         println("cate_pref_"+s._1,s._2)
        jedis.set("cate_pref_"+s._1,s._2)
@@ -71,48 +124,65 @@ class UserAction {
     val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * 60))
     val sql = "select member_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
       s"where dt >= $start and behavior_type=1000"
-    //ck,date,category,goods_sid=>1
+    //mId,date,category,goods_sid=>1
     val ucgRawRdd  = hiveContext.sql(sql).rdd.map(row=>((row.getString(0),row.getString(1).substring(0,10),row.getString(3),
       row.getString(4)),1))
-    //category,goods,date=>memId,pv
-    val ucAcuRdd = ucgRawRdd.reduceByKey(_ + _).map(x=> ((x._1._3,x._1._4,x._1._2),(x._1._1,x._2)))
-    //val ucRawRdd  = hiveContext.sql(sql).rdd.map(row=>((row.getString(3),row.getString(1).substring(0,10)),row.getString(0)))
+    //cateId,goods_sid,date=>memId,pv
+    val ucAcuRdd = ucgRawRdd.reduceByKey(_ + _).map{case((mId,date,cate,gId),deg)=> ((cate,gId,date),(mId,deg))}
     val goodsSQL ="select category_sid, goods_sid,date,pv from recommendation.user_preference_goods_visit"
-    //category,goods,date,count pv
-    val cgRdd  = hiveContext.sql(goodsSQL).rdd.map(row=>((row.getString(0), row.getString(1),row.getString(2)),row.getLong(3)))
-    //((102564,goodsID,2016-04-16),((88867259525614535970958,1),3))
+    //cateId,goods,date,count pv
+    val cgRdd  = hiveContext.sql(goodsSQL).rdd.map(row=>((row.getString(0),row.getString(1),row.getString(2)),row.getLong(3)))
     val unormRdd = ucAcuRdd.join(cgRdd)
     //((103466,(21021460629373192854469,4)),0.18402591023557582,33,2016-04-14)
-    val prefRdd = unormRdd.map(x=>{
+    val prefRdd =  unormRdd.map{
+      case(((cate,gId,date),((mId,deg),pv)))=>
+      {
+        val sdf = new SimpleDateFormat("yyyy-MM-dd")
+        val today = sdf.format(new Date)
+        val b=sdf.parse(today).getTime-sdf.parse(date).getTime
+        val num=b/(1000*3600*24)
+        ((mId,cate,gId),(deg.toDouble/pv.toDouble)*scala.math.pow(0.75,num))
+      }
+    }.reduceByKey( _  + _).filter(_._2 > 0.000001)
+      .map{case ((mId,cate,gId),deg)=>
+        (mId,(cate,gId,deg))
+      }
+
+
+    //购买行为
+    val shopsql = "select member_id, event_date, behavior_type, category_sid, goods_sid from recommendation.user_behavior_raw_data  " +
+      s"where dt >= $start and behavior_type=4000 and member_id is not null and  member_id <>'null' and member_id <>'NULL' and member_id <>''"
+    //memberId,date,category,goods_sid=>1
+    val shopRdd = hiveContext.sql(shopsql).rdd.map(row => (row.getString(0), row.getString(1).substring(0, 10), row.getString(3),
+      row.getString(4), 2))
+    val transShopRdd = shopRdd.map{case(memberId,date,category,goods_sid,degree)=>
       val sdf = new SimpleDateFormat("yyyy-MM-dd")
       val today = sdf.format(new Date)
-      val b=sdf.parse(today).getTime-sdf.parse(x._1._3).getTime
+      val b=sdf.parse(today).getTime-sdf.parse(date).getTime
       val num=b/(1000*3600*24)
-      //(goods_sid,mId)
-      ((x._1._1,x._1._2,x._2._1._1),((x._2._1._2.toDouble/x._2._2)*scala.math.pow(0.75,num)))})
-      .reduceByKey( _  + _).filter(_._2 > 0.001)
-      .map(u=>{
-        //mId,cateID,
-        ((u._1._3,u._1._1),Seq((u._1._2,u._2)))
-      }).reduceByKey(_ ++ _)
+      (memberId,(category,goods_sid,degree *scala.math.pow(0.9,num)))
+    }
+
+    val userRdd =  prefRdd.union(transShopRdd).map{case(memberId,(category,goods_sid,degree))=>
+      ((memberId,category,goods_sid),degree)
+    }.reduceByKey(_ + _)
+      .map { case ((memberId,category, goods_sid), degree) => ((memberId,category),Seq((goods_sid,degree.toDouble)))}
+      .reduceByKey(_ ++ _)
       .mapValues(x=>{
         x.sortWith((a,b)=>a._2>b._2)
-      })
-    //((100000000019135,103071),List((264363,0.0010033912775533338), (268533,0.0010033912775533338)))
-    .map(x=>{
-      val mId=x._1._1
-      val cateId = x._1._2
-      val goods = x._2.take(5).map{case(m,n)=>m}.mkString(",")
-      (mId,Seq(cateId+":"+goods))
-    }).reduceByKey(_ ++ _).mapValues(cgs=>cgs.mkString("#"))
+              })
+      .map(x=>{
+              val mId=x._1._1
+              val cateId = x._1._2
+              val goods = x._2.take(5).map{case(m,n)=>m}.mkString(",")
+              (mId,Seq(cateId+":"+goods))
+            }).reduceByKey(_ ++ _).mapValues(cgs=>cgs.mkString("#"))
 
-    prefRdd.foreachPartition(partition => {
-      //val jedis = RedisClient.pool.getResource
+    userRdd.foreachPartition(partition => {
       val jedisCluster = RedisClient.jedisCluster
       partition.foreach(s => {
         jedisCluster.set("rcmd_goods_pref_"+s._1,s._2)
       })
-     // jedis.close()
     })
 
     sc.stop()

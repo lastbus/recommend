@@ -5,7 +5,7 @@ import java.util.Date
 
 import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
-import com.bl.bigdata.util.{RedisClient, ConfigurationBL, SparkFactory, Tool}
+import com.bl.bigdata.util._
 import org.apache.spark.Accumulator
 import org.apache.spark.rdd.RDD
 
@@ -22,17 +22,26 @@ import scala.collection.mutable._
  */
 class GoodsNewArrival extends Tool {
 
+  private var expireTime: Int = 604800
+
   override def run(args: Array[String]): Unit = {
+    val optionsMap = GoodsNewArrayConf.parser(args)
     logger.info("新品上市开始计算........")
+    // 输出参数
+    optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("\n新商品上市：\n")
-    val prefixPC = ConfigurationBL.get("goods.new.arrival.prefix.pc")
-    val prefixAPP = ConfigurationBL.get("goods.new.arrival.prefix.app")
+    val output = optionsMap(GoodsNewArrayConf.output)
+    val prefixPC = optionsMap(GoodsNewArrayConf.prefixPc)
+    val prefixAPP = optionsMap(GoodsNewArrayConf.prefixApp)
+    if (optionsMap.contains(GoodsNewArrayConf.expireTime))
+      expireTime = optionsMap(GoodsNewArrayConf.expireTime).toInt
+
     val sc = SparkFactory.getSparkContext("goods new arrival")
     val sql = "select sid, pro_sid, brand_sid, category_id, channel_sid, sell_start_date " +
               "from recommendation.goods_new_arrival"
 
     val nowMills = new Date().getTime
-    val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+    val sdf = new SimpleDateFormat(optionsMap(GoodsNewArrayConf.sdf))
     val rawData = ReadData.readHive(sc, sql)
                           .map { case Array(sid, productID, bandID, categoryID, channelID, onlineTime) =>
                                     (bandID, sid, productID, categoryID, channelID, (nowMills - sdf.parse(onlineTime).getTime) / 1000)}
@@ -43,7 +52,7 @@ class GoodsNewArrival extends Tool {
     val pcResult = calculate(pcRDD).map(s => (prefixPC + s._1, s._2))
     val pcAccumulator = sc.accumulator(0)
 
-    val redisType = ConfigurationBL.get("redis.type")
+    val redisType = if (output.contains("cluster")) "cluster" else "standalone"
 
     saveToRedis(pcResult, pcAccumulator, redisType)
     Message.addMessage(s"\tpc: 插入 redis $prefixPC* :\t $pcAccumulator")
@@ -129,8 +138,9 @@ class GoodsNewArrival extends Tool {
 
 object GoodsNewArrival {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
 
+    (new GoodsNewArrival).run(args)
   }
 
 
@@ -152,6 +162,26 @@ object GoodsNewArrival {
       }
 
     }
+  }
+
+}
+
+object GoodsNewArrayConf  {
+  val output = "output"
+  val sdf = "dateFormat"
+  val prefixApp = "appPrefix"
+  val prefixPc = "pcPrefix"
+  val expireTime = "expire"
+
+  val commandLine = new MyCommandLine("GoodsNewArray")
+  commandLine.addOption("o", output, true, "output data to where", "redis-cluster")
+  commandLine.addOption("sdf", sdf, true, "date fromat", "yyyy-MM-dd HH:mm:ss")
+  commandLine.addOption("app", prefixApp, true, "app goods prefix", "rcmd_newgoods_app")
+  commandLine.addOption("pc", prefixPc, true, "pc goods prefix", "rcmd_newgoods_pc")
+  commandLine.addOption("e", expireTime, true, "redis key expire time")
+
+  def parser(args: Array[String]) : scala.collection.immutable.Map[String, String] = {
+    commandLine.parser(args)
   }
 
 }

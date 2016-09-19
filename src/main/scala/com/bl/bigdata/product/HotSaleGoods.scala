@@ -17,26 +17,37 @@ import org.apache.spark.rdd.RDD
 class HotSaleGoods extends Tool {
 
   override def run(args: Array[String]): Unit = {
+    val optionsMap = HotSaleConf.parse(args)
+
     logger.info("品类热销开始计算........")
+    // 输出参数
+    optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("\n品类热销商品：\n")
-    val output = ConfigurationBL.get("recmd.output")
-    val prefix = ConfigurationBL.get("hot.sale")
+
+    val input = optionsMap(HotSaleConf.input)
+    val output = optionsMap(HotSaleConf.output)
+    val prefix = optionsMap(HotSaleConf.goodsIdPrefix)
     val hbase = output.contains("hbase")
     val redis = output.contains("redis")
 
-    val deadTimeOne = HotSaleGoods.getDateBeforeNow(30)
+    val days = optionsMap(HotSaleConf.days).toInt
+    val deadTimeOne = HotSaleGoods.getDateBeforeNow(days)
+    // 权重系数
     val deadTimeOneIndex = 2
     val sc = SparkFactory.getSparkContext("品类热销商品")
     val accumulator = sc.accumulator(0)
     val accumulator2 = sc.accumulator(0)
 
-    val sdf = new SimpleDateFormat("yyyyMMdd")
+    val sdf = new SimpleDateFormat(optionsMap(HotSaleConf.sdf))
     val date = new Date
     val start = sdf.format(new Date(date.getTime - 24000L * 3600 * 60))
-    val sql = s"select goods_sid, goods_name, quanlity, event_date, category_sid " +
-              s" from recommendation.user_behavior_raw_data where dt >= $start"
 
-    val result = ReadData.readHive(sc, sql)
+    val sql = s"select goods_sid, goods_name, quanlity, event_date, category_sid " +
+              s" from recommendation.user_behavior_raw_data where dt >= $start and quanlity <> null and quanlity <> '' "
+
+    val sqlName = optionsMap(HotSaleConf.sql)
+    val rawRDD = DataBaseUtil.getData(input, sqlName, start).filter(_.contains(null))
+    val result = rawRDD.filter(s => s != null && s(2).length >= 0 && !s.contains(null) && !s(2).equalsIgnoreCase("NULL") )
                           .map { case Array(goodsID, goodsName, sale_num, sale_time, categoryID) =>
                                       (goodsID, goodsName, sale_num.toInt, sale_time, categoryID) }
                           .map { case (goodsID, goodsName, sale_num, sale_time, categoryID) =>
@@ -48,7 +59,7 @@ class HotSaleGoods extends Tool {
                           .map { case (category, seq) => {accumulator += 1; (prefix + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) }}
     result.cache()
     if(redis) {
-      val redisType = ConfigurationBL.get("redis.type")
+      val redisType = if (output.contains("cluster")) "cluster" else "standalone"
 //      sc.toRedisKV(result)
 //      saveToRedis(result, accumulator2, redisType)
       RedisClient.sparkKVToRedis(result, accumulator2, redisType)
@@ -132,4 +143,28 @@ object HotSaleGoods {
   def filterDate(item: (String, String, Double, String, String, String), deadTime: String): Boolean = {
     item._4 >= deadTime
   }
+}
+object HotSaleConf  {
+
+  val input = "input"
+  val sql= "sql"
+  val output = "output"
+
+  val goodsIdPrefix = "goods id prefix"
+  val days = "n-days"
+  val sdf = "dateFormat"
+
+
+  val buyGoodsSimCommand = new MyCommandLine("HotSale")
+  buyGoodsSimCommand.addOption("i", input, true, "data.source", "hive")
+  buyGoodsSimCommand.addOption("o", output, true, "output data to redis， hbase or HDFS", "redis-cluster")
+  buyGoodsSimCommand.addOption(sql, sql, true, "user.behavior.raw.data", "hot.sale")
+  buyGoodsSimCommand.addOption("pm", goodsIdPrefix, true, "goods id prefix", "rcmd_cookieid_view_")
+  buyGoodsSimCommand.addOption("n", days, true, "days before today", "30")
+  buyGoodsSimCommand.addOption("sdf", sdf, true, "date format", "yyyyMMdd")
+
+  def parse(args: Array[String]): Map[String, String] ={
+    buyGoodsSimCommand.parser(args)
+  }
+
 }

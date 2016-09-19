@@ -18,12 +18,8 @@ object Redis13 {
 //    jedisClusterNodes.add(new HostAndPort("10.201.129.80", 6379))
 
     val jedisCluster = new JedisCluster(jedisClusterNodes)
-    println(jedisCluster.get("key"))
-    for (i <- 0 until 1000000){
-      jedisCluster.set("foo" + i, i.toString)
-      println ("foo" + i)
-      Thread.sleep (2)
-    }
+    val k = jedisCluster
+
 
     jedisCluster.close()
 

@@ -15,16 +15,6 @@ object SparkFactory {
   def getSparkContext(appName: String = "recommend"): SparkContext = {
     if (sc == null) {
       val sparkConf = new SparkConf().setAppName(appName)
-//      require(ConfigurationBL.getAll.length > 0)
-//      val confFile = ConfigurationBL.get("extra.configuration.file", "")
-      // 加载hadoop其他配置文件，比如 hbase-site.xml、hive-site.xml等等符合hadoop配置文件规则的xml文件
-//      if ( !confFile.isEmpty )
-//        for ( conf <- confFile.split(",") ) {
-//          val xml = XML.load(conf)
-//          val properties = xml \ "property"
-//          for (property <- properties)
-//            sparkConf.set((property \ "name").text, (property \ "value").text)
-//        }
       sc = new SparkContext(sparkConf)
       Message.addMessage("application-id:\t" + sc.applicationId)
       Message.addMessage("application-master:\t" + sc.master)

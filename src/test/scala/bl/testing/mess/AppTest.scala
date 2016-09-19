@@ -70,6 +70,15 @@ class AppTest {
 
     }
 
+    @Test
+    def doub = {
+
+        val d = "1.1.1"
+        println(d.toDouble)
+
+
+    }
+
 }
 
 

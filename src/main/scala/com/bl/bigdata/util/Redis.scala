@@ -4,7 +4,7 @@ package com.bl.bigdata.util
  * Created by MK33 on 2016/4/27.
  */
 trait Redis {
-  ConfigurationBL.addResource("redis.xml")
+  ConfigurationBL.addResource("redis.properties")
   println("=============== redis ================")
   var host: String = ConfigurationBL.get("redis.host")
   val port: Int = ConfigurationBL.get("redis.port").toInt
