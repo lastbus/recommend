@@ -20,12 +20,16 @@ class MyCommandLine(name: String) {
     if (mustHaveValue) {
       val option = new Option(shortName, longName, hasArgs, desc)
       option.setRequired(true)
+      options.addOption(option)
     } else addOption(shortName, longName,hasArgs, desc)
   }
   /** 默认值 */
   def addOption(shortName: String, longName: String, hasArgs: Boolean, desc: String, defaultValue: String): Unit ={
     addOption(shortName, longName,hasArgs, desc)
     optionMap(longName) = defaultValue
+  }
+  def addOption(option: Option): Unit = {
+    addOption(option)
   }
 
   val parser = new BasicParser

@@ -32,7 +32,7 @@ object ProducerDemo {
         val metadata = producer.send(new ProducerRecord[String, String](topic, null, "foo" + i.toString),
         new Callback {
           override def onCompletion(metadata: RecordMetadata, exception: Exception): Unit = {
-            if (metadata != null ) println("topic: " + metadata.topic() + "   partition:  " + metadata.partition() + "  offset: " + metadata.offset() + "   value: ")
+            if (metadata != null ) println("topic: " + metadata.topic() +  s"  message :  foo$i" + "   partition:  " + metadata.partition() + "  offset: " + metadata.offset() + "   value: ")
             if (exception != null) println(exception.getMessage)
           }
         })
@@ -40,7 +40,7 @@ object ProducerDemo {
         case e: Throwable => println(e.getMessage)
       }
       println("send " + i + " to " + url + " : " + topic)
-      Thread.sleep(1000)
+      Thread.sleep(500)
     }
 
     producer.close()

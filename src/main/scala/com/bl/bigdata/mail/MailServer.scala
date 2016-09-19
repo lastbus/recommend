@@ -1,7 +1,7 @@
 package com.bl.bigdata.mail
 
 import java.text.SimpleDateFormat
-import java.util.Date
+import java.util.{Date, Properties}
 
 import com.bl.bigdata.util.ConfigurationBL
 import org.apache.commons.mail.{DefaultAuthenticator, SimpleEmail}
@@ -13,8 +13,28 @@ import org.apache.logging.log4j.LogManager
 object MailServer {
   private val logger = LogManager.getLogger(this.getClass.getName)
 
-  def send(message: String) = {
-    val email = getEmail(ConfigurationBL.get("mail.type"))
+  lazy val mailProps: Properties = {
+    val properties = new Properties()
+    val in = Thread.currentThread().getContextClassLoader.getResourceAsStream("mail.properties")
+    if (in == null) {
+      println("no mail.properties found.")
+      null
+    } else {
+      try {
+        properties.load(in)
+      } finally {
+        in.close()
+      }
+      properties
+    }
+  }
+
+  def send(message: String): Unit = {
+    if (mailProps == null) {
+      println("no mail properties file found, exit.")
+      return
+    }
+    val email = getEmail()
     val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
     email.setMsg(message)
     email.setSubject("redis report: " + sdf.format(new Date))
@@ -22,37 +42,32 @@ object MailServer {
     email.send
   }
 
-  def send(msg: Array[String]): Unit = {
-    for (m <- msg) {
-      send(m)
-      Thread.sleep(1000)
-    }
-  }
-
-  def getEmail(mailType: String): SimpleEmail = {
+  def getEmail(): SimpleEmail = {
     val email = new SimpleEmail
-    if (mailType.equals("sina")) {
-      email.setHostName("smtp.sina.com")
-      email.setAuthenticator(new DefaultAuthenticator("disanyuzhou2016@sina.com", "sh1@bl2$3"))
-      email.setFrom("disanyuzhou2016@sina.com")
-      for (who <- ConfigurationBL.get("mail.to").split(",")) email.addTo(who)
-      email
-    } else {
-      email.setHostName("mail.bl.com")
-      email.setAuthenticator(new DefaultAuthenticator("MK33", "Make819307659"))
-      email.setFrom("Ke.Ma@bl.com")
-      for (who <- ConfigurationBL.get("mail.to").split(",")) email.addTo(who)
-      email
-    }
+    email.setHostName(mailProps.getProperty("mail.host"))
+    email.setAuthenticator(new DefaultAuthenticator(mailProps.getProperty("mail.user"), mailProps.getProperty("mail.password")))
+    email.setFrom(mailProps.getProperty("mail.from"))
+    for (who <- mailProps.getProperty("mail.to").split(",")) email.addTo(who)
+    email
   }
 
   def main(args: Array[String]) {
-    ConfigurationBL.init()
-    val email = getEmail("tt")
-    val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
-    email.setMsg("test")
-    email.setSubject("redis report: " + sdf.format(new Date))
-    logger.info(s"send email:")
-    email.send
+
+    send("test")
+
   }
+
+
+  def test = {
+    val email = new SimpleEmail
+    email.setHostName("mail.bl.com")
+    email.setDebug(true)
+    email.setAuthenticator(new DefaultAuthenticator("RPublish", "bl@123"))
+    email.setFrom("Recommend-Publish@bl.com")
+    email.addTo("Ke.Ma@bl.com")
+    email.send()
+
+  }
+
+
 }

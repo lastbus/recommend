@@ -3,7 +3,6 @@ package com.bl.bigdata.product
 import com.bl.bigdata.accumulator.MyAccumulator._
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{Accumulator, SparkContext}
 
@@ -11,62 +10,81 @@ import org.apache.spark.{Accumulator, SparkContext}
 /**
   * 计算商品的属性，保存成redis中hash值。
   * Created by MK33 on 2016/3/21.
+  *
   */
 class GoodsForSale extends Tool {
+  var optionMap: Map[String, String] = _
+  // output result to where
+  var out: String = "redis-cluster"
 
   override def run(args: Array[String]): Unit = {
-    logger.info("商品属性开始计算......")
-    Message.addMessage("\ngoods for sale:\n")
-    val sc = SparkFactory.getSparkContext("goods.for.sale")
-    val hiveContext = new HiveContext(sc)
-    toRedis1(hiveContext)
-    toRedis2(hiveContext)
-    category(hiveContext)
+    optionMap = try {
+      GoodsForSaleConf.parse(args)
+    } catch {
+      case e: Throwable =>
+        logger.error("goods for sale parse commandline error: " + e)
+        GoodsForSaleConf.printHelp
+        return
+    }
+      logger.info("商品属性开始计算......")
+      Message.addMessage("\ngoods for sale:\n")
+      val sc = SparkFactory.getSparkContext("goods.for.sale")
+      val hiveContext = SparkFactory.getHiveContext
+      toRedis1(hiveContext)
+//      toRedis2(hiveContext)
+      category(hiveContext)
 
-    logger.info("商品属性计算结束。")
+      logger.info("商品属性计算结束。")
   }
 
   /** 商品类别下面有哪些商品，某个商品属于那个类别 */
   def toRedis1(hiveContext: HiveContext) = {
     logger.info("\t商品类别下面有哪些商品开始计算....")
-    val prefix = ConfigurationBL.get("goods.for.sale")
-    val prefix2 = ConfigurationBL.get("goods.for.sale.2")
-    val sql = "select sid, category_id from recommendation.goods_avaialbe_for_sale_channel where channel_sid = '3'"
-    val readRDD = hiveContext.sql(sql).rdd.map(row => if (row.anyNull) null else (row.getString(0), row.getLong(1).toString))
-                                          .filter(_ != null).distinct()
+    val in = optionMap(GoodsForSaleConf.in)
+    val prefix = optionMap(GoodsForSaleConf.pre_0)
+    val prefix2 = optionMap(GoodsForSaleConf.pre_1)
+    val sql = "select sid, category_id, store_sid from recommendation.goods_avaialbe_for_sale_channel  where sale_status = 4 and stock = 1  "
+    val sqlName = optionMap(GoodsForSaleConf.sql_goods)
+//    val readRDD = hiveContext.sql(sql).rdd.map(row => if (row.anyNull) null else (row.getString(0), row.getLong(1).toString))
+//                                          .filter(_ != null).distinct()
+
+    val readRDD = DataBaseUtil.getData(in, sqlName).filter(s => s(0) != "null" && s(1) != "null").map { case Array(sid, category, storeId) => (sid, category, storeId) }.distinct()
     val sc = hiveContext.sparkContext
     val count1Accumulator = sc.accumulator(0)
     val count2Accumulator = sc.accumulator(0)
     val count3Accumulator = sc.accumulator(0)
     val count4Accumulator = sc.accumulator(0)
-    val goodsIDToCategoryIDRDD = readRDD map { case (goodsID, categoryID) =>
+    val goodsIDToCategoryIDRDD = readRDD map { case (goodsID, categoryID, storeId) =>
       count1Accumulator += 1
       (prefix + goodsID, categoryID)
     }
-//    sc.toRedisKV(goodsIDToCategoryIDRDD)
-    saveToRedis(goodsIDToCategoryIDRDD, count2Accumulator)
-    Message.addMessage(s"\t$prefix* : $count1Accumulator\n")
-    Message.addMessage(s"\t插入 redis $prefix* : $count2Accumulator\n")
+    out = optionMap(GoodsForSaleConf.out)
 
-    val categoryIDToGoodsID = readRDD.map(s => (s._2, Seq(s._1))).reduceByKey(_ ++ _)
+    val categoryIDToGoodsID = readRDD.map(s => ((s._2, s._3), Seq(s._1))).reduceByKey(_ ++ _)
                                       .map { case (categoryID, goodsID) =>
                                         count3Accumulator += 1
-                                        (prefix2 + categoryID, goodsID.mkString("#"))}
-//    sc.toRedisKV(categoryIDToGoodsID)
-    val redisType = ConfigurationBL.get("redis.type")
-//    saveToRedis(categoryIDToGoodsID, count4Accumulator)
-    RedisClient.sparkKVToRedis(categoryIDToGoodsID, count4Accumulator, redisType)
-    Message.addMessage(s"\t插入 $prefix2*: $count3Accumulator\n")
+                                        val key = if (categoryID._2 == "null") prefix2 + categoryID._1 else prefix2 + categoryID._2 + "_" + categoryID._1
+                                        (key, goodsID.mkString("#"))
+                                      }
+    if (out.contains("redis")) {
+      val redisType = if (out.contains(RedisClient.cluster)) RedisClient.cluster else RedisClient.standalone
+      RedisClient.sparkKVToRedis(goodsIDToCategoryIDRDD, count2Accumulator, redisType)
+      RedisClient.sparkKVToRedis(categoryIDToGoodsID, count4Accumulator, redisType)
+    }
+    Message.addMessage(s"\t$prefix* : $count1Accumulator\n")
+    Message.addMessage(s"\t插入 redis $prefix* : $count2Accumulator\n")
+    Message.addMessage(s"\t $prefix2*: $count3Accumulator\n")
     Message.addMessage(s"\t插入 $prefix2*: $count4Accumulator\n")
     logger.info("\t商品类别下面有哪些商品计算结束。")
   }
 
   /**
     * 统计商品属性，保存在 redis 中。
+    * on use temporary
     * @param hiveContext 读取 hive 表
     */
+  @Deprecated
   def toRedis2(hiveContext: HiveContext) = {
-
 
     val sql = "select sid, mdm_goods_sid, goods_sales_name, goods_type, pro_sid, brand_sid, " +
                       "cn_name, category_id, category_name, sale_price, pic_sid, url, channel_sid  " +
@@ -95,86 +113,19 @@ class GoodsForSale extends Tool {
                                             val m = new java.util.HashMap[String, String]
                                             for ((k, v) <- map) if (v != null) m.put(k, v) else m.put(k, "null")
                                             val terminal = if ( channel == "3") "pc_" else "app_"
-                                            (prefix + terminal + sid, m)}
-//    sc.hashKVRDD2Redis(r)
-//    saveToRedisHash(r, accumulator, accumulator1)
-    saveToRedisHash2(r, accumulator, accumulator1, errorMessage)
-//    val result = RedisWriter.saveHashValue(r)
+                                            (prefix + terminal + sid, m) }
+    val redisType = if (out.contains(RedisClient.cluster)) RedisClient.cluster else RedisClient.standalone
+    RedisClient.sparkHashToRedis(r, accumulator, redisType)
     if (errorMessage.value.length() > 1) Message.addMessage(errorMessage.value.toString)
     Message.addMessage(s"\t$prefix*: $accumulator\n")
     Message.addMessage(s"\t插入 redis $prefix pc/app*: $accumulator1\n")
-//    logger.info(result)
-//    Message.addMessage(result)
+
   }
-
-  /**
-   * 搜集executor失败的信息，返回到driver
-   * @param rdd
-   * @param accumulator
-   * @param accumulator2
-   */
-  def saveToRedisHash2(rdd: RDD[(String, java.util.HashMap[String, String])],
-                      accumulator: Accumulator[Int], accumulator2: Accumulator[Int],
-                        messageAccumulator: Accumulator[StringBuffer]) ={
-    rdd.foreachPartition(partition => {
-      val jedis = RedisClient.pool.getResource
-      var i = 0
-      val sb = new StringBuffer()
-      partition.foreach(data => {
-        accumulator += 1
-        try {
-          jedis.hmset(data._1, data._2)
-        } catch {
-          case e: Exception =>
-            i += 1
-            sb.append(s"insert into redis error : ${data._1}\n ${e.getMessage}\n")
-            if (i > 10) throw new Exception(e) // 累计导入redis失败100条则报错。
-        }
-        accumulator2 += 1
-        messageAccumulator += sb
-      })
-      jedis.close()
-
-    })
-  }
-
-  def saveToRedisHash(rdd: RDD[(String, java.util.HashMap[String, String])],
-                      accumulator: Accumulator[Int], accumulator2: Accumulator[Int]) ={
-    rdd.foreachPartition(partition => {
-      try {
-        val jedis = RedisClient.pool.getResource
-        partition.foreach(data => {
-          accumulator += 1
-          jedis.hmset(data._1, data._2)
-          accumulator2 += 1
-        })
-        jedis.close()
-      } catch {
-        case e: Exception => Message.addMessage(e.getMessage)
-      }
-
-    })
-  }
-
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int]): Unit = {
-    rdd.foreachPartition(partition => {
-      try {
-        val jedis = RedisClient.pool.getResource
-        partition.foreach(s => {
-          jedis.set(s._1, s._2)
-          accumulator += 1
-        })
-        jedis.close()
-      } catch {
-        case e: Exception => Message.addMessage(e.getMessage)
-      }
-    })
-  }
-
 
   /**
     * 根据商品 id 得到它上一级品类ID；
     * 根据品类ID，得到所属的商品ID列表
+    *
     * @param hiveContext 读取 hive 表
     */
   def category(hiveContext: HiveContext): Unit = {
@@ -196,8 +147,11 @@ class GoodsForSale extends Tool {
                                           accumulator1 += 2
                                           array }
                               .flatMap(s => s)
-//    sc.toRedisKV(readRDD)
-    saveToRedis(readRDD, accumulator2)
+
+    if (out.contains("redis")){
+      val redisType = if (out.contains(RedisClient.cluster)) RedisClient.cluster else  RedisClient.standalone
+      RedisClient.sparkKVToRedis(readRDD, accumulator2, redisType)
+    }
     Message.addMessage(s"\t rcmd_*category_*: $accumulator1\n")
     Message.addMessage(s"\t插入 redis rcmd_*category_*: $accumulator2\n")
   }
@@ -261,7 +215,33 @@ object GoodsForSale {
         case e: Exception => Message.addMessage(e.getMessage)
       }
     })
-
-
   }
+}
+
+object GoodsForSaleConf {
+
+  val in = "input"
+  val out = "output"
+  val pre_0 = "pref_0"
+  val pre_1 = "pref_1"
+  val pre_2 = "pref_2"
+  val sql_goods = "sqlGoods"
+  val expire = "time-to-live"
+
+  val commandLine = new MyCommandLine("goodsForSale")
+  commandLine.addOption("i", in, true, "input data source type", "hive")
+  commandLine.addOption("o", out, true, "output data to where", "redis-" + RedisClient.cluster)
+  commandLine.addOption("p0", pre_0, true, "rcmd_cate_", "rcmd_cate_")
+  commandLine.addOption("p1", pre_1, true, "rcmd_cate_goods_", "rcmd_cate_goods_")
+  commandLine.addOption("sql1", sql_goods, true, "goods for sale sql_name", "goods.for.sale")
+  commandLine.addOption("ttl", expire, true, "seconds for a key to live in redis", "1296000")
+
+  def parse(args: Array[String]): Map[String, String] ={
+    commandLine.parser(args)
+  }
+
+  def printHelp = {
+    commandLine.printHelper
+  }
+
 }

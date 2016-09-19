@@ -4,6 +4,8 @@ import java.text.{DecimalFormat, SimpleDateFormat}
 import java.util.{Calendar, Date}
 
 import com.bl.bigdata.util.{DataBaseUtil, MyCommandLine, SparkFactory}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 
 /**
   * Created by MK33 on 2016/7/11.
@@ -36,9 +38,7 @@ object CategoryBand {
                 s" INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '$date' " +
                 s" where isnotnull(g.brand_sid) and g.brand_sid <> 'null' "
 
-    val sc = SparkFactory.getSparkContext("search.category")
-
-    val spuRDD = DataBaseUtil.getData(input, sqlSpu, date).map { case Array(lev1, lev2, lev3, lev4, lev5, brand, productId) =>
+    val spuRDD = DataBaseUtil.getData(input, sqlSpu, date, date, date).map { case Array(lev1, lev2, lev3, lev4, lev5, brand, productId) =>
         ((lev1, lev2, lev3, lev4, lev5, brand), productId)
       }.distinct().mapValues(_ => 1).reduceByKey(_ + _).map { s => ((s._1._1,s._1._2,s._1._3, s._1._4, s._1._5), Seq((s._1._6, s._2)))}.reduceByKey(_ ++ _)
       .map{ case (a, s) =>
@@ -55,7 +55,7 @@ object CategoryBand {
       s" INNER JOIN sourcedata.s06_pcm_mdm_goods g ON g.sid = n.goods_code AND g.dt = '$date' " +
       " where n.cdate = " + date + " and (isnotnull(g.brand_sid) and g.brand_sid <> 'null') "
 
-    val sellRDD = DataBaseUtil.getData(input, sqlSell, date, date).map { case Array(lev1, lev2, lev3, lev4, lev5, brand, productId, saleMoney, indexType) =>
+    val sellRDD = DataBaseUtil.getData(input, sqlSell, date, date, date, date).map { case Array(lev1, lev2, lev3, lev4, lev5, brand, productId, saleMoney, indexType) =>
       ((lev1, lev2, lev3, lev4, lev5, brand, indexType), saleMoney.toDouble)
     }.reduceByKey(_ + _).map(s => ((s._1._1, s._1._2, s._1._3, s._1._4, s._1._5, s._1._7), Seq((s._1._6, s._2 )))).reduceByKey(_ ++ _)
       .map { case (l, brands) =>
@@ -67,21 +67,61 @@ object CategoryBand {
       }.flatMap(s => s)
 
     val result = spuRDD.union(sellRDD).reduceByKey(_ + _)
-    result.cache()
+    result.persist(StorageLevel.MEMORY_AND_DISK_2)
     val hiveSql = SparkFactory.getHiveContext
     import hiveSql.implicits._
 
     // (category, brand, score)
-    val leve5 = result.filter(_._1._5 != null).map(s => ((s._1._5, s._1._6), s._2)).reduceByKey(_ + _)
-      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("L5")
-    val leve4 = result.filter(_._1._4 != null).map(s => ((s._1._4, s._1._6), s._2)).reduceByKey(_ + _)
-      .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("L4")
-    val leve3 = result.filter(_._1._3 != null).map(s => ((s._1._3, s._1._6), s._2)).reduceByKey(_ + _)
-      .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("L3")
-    val leve2 = result.filter(_._1._4 != null).map(s => ((s._1._2, s._1._6), s._2)).reduceByKey(_ + _)
-      .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("L2")
-    val leve1 = result.filter(_._1._4 != null).map(s => ((s._1._1, s._1._6), s._2)).reduceByKey(_ + _)
-      .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("L1")
+    result.filter(_._1._5 != null).map(s => ((s._1._5, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+      .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L5")
+
+
+    result.filter(_._1._4 != null).map(s => ((s._1._4, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+      .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L4")
+
+
+    result.filter(_._1._3 != null).map(s => ((s._1._3, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+      .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L3")
+
+
+    result.filter(_._1._2 != null).map(s => ((s._1._2, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+      .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L2")
+
+
+    result.filter(_._1._1 != null).map(s => ((s._1._1, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+      .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L1")
+
+
 
     hiveSql.sql(s"insert overwrite table $hiveTableName partition(dt='$date')  " +
       " select level, brand, score from L1 union all select level, brand, score from L2  " +
@@ -89,32 +129,70 @@ object CategoryBand {
       "union all select level, brand, score from L5 ")
 
     // (category, score)
-    result.filter( _._1._1 != null).map(s => (s._1._1, s._2)).reduceByKey(_ + _)
-      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._1, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("C1")
-    result.filter( _._1._2 != null).map(s => (s._1._2, s._2)).reduceByKey(_ + _)
-      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._1, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("C2")
-    result.filter( _._1._3 != null).map(s => (s._1._3, s._2)).reduceByKey(_ + _)
-      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._1, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("C3")
-    result.filter( _._1._4 != null).map(s => (s._1._4, s._2)).reduceByKey(_ + _)
-      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._1, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("C4")
-    result.filter( _._1._5 != null).map(s => (s._1._5, s._2)).reduceByKey(_ + _)
-      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._1, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("C5")
+//    result.filter( _._1._1 != null).map(s => (s._1._1, s._2)).reduceByKey(_ + _)
+//      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._1, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("C1")
+
+    result.filter( s => s._1._1 != null && s._1._2 != null).map(s => ((s._1._1, s._1._2), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+    .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C2")
+
+    result.filter(s => s._1._2 != null && s._1._3 != null).map(s => ((s._1._2, s._1._3), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+    .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C3")
+
+    result.filter( s => s._1._3 != null && s._1._4 != null).map(s => ((s._1._3, s._1._4), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+    .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C4")
+
+    result.filter( s => s._1._4 != null && s._1._5 != null).map(s => ((s._1._4, s._1._5), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
+    .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      val max = goods.map(_._2).max
+      val min = goods.map(_._2).min
+      val divider = if (max - min == 0.0) 1 else max - min
+      goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C5")
 
     hiveSql.sql(s"insert overwrite table $hiveTableName2 partition(dt='$date')  " +
-      " select category, score from C1 " +
-      "union all select category, score from C2  " +
-      "union all select category, score from C3  " +
-      "union all select category, score from C4  " +
-      "union all select category, score from C5 ")
-
+      " select category, parentCate, score from C2 " +
+      "union all select category, parentCate, score from C3  " +
+      "union all select category, parentCate, score from C4  " +
+      "union all select category, parentCate, score from C5 ")
 
 
   }
 
+  /** 归一化处理 */
+  def unify(rdd: RDD[(String, String, Double)]): RDD[(String, String, Double)] = {
+    rdd.map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+        val max = goods.map(_._2).max
+        val min = goods.map(_._2).min
+        val divider = if (max - min == 0.0) 1 else max - min
+        goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+    }.flatMap(s => s)
+  }
+
+
+
 }
 
 case class CategoryScore(level: String, brand: String, score: Double)
-case class CategoryScore2(category: String, score: Double)
+case class CategoryScore2(category: String, parentCate: String, score: Double)
 
 object CategoryScoreConf {
   val input = "input"

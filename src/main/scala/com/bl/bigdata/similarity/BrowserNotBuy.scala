@@ -15,9 +15,7 @@ import org.apache.spark.rdd.RDD
 class BrowserNotBuy extends Tool {
 
   override def run(args: Array[String]): Unit = {
-
     val optionsMap = BrowserNotBuyConf.parse(args)
-
     logger.info("最近两个月浏览未购买商品开始计算......")
     // 输出参数
     optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
@@ -38,7 +36,7 @@ class BrowserNotBuy extends Tool {
 
     val sqlName = optionsMap(BrowserNotBuyConf.sql)
     val rawRDD = DataBaseUtil.getData(input, sqlName, start)
-    val a = rawRDD.filter(_.contains(null)).map { case Array(cookie, date, behavior, category, goods) =>
+    val a = rawRDD.filter(!_.contains("null")).map { case Array(cookie, date, behavior, category, goods) =>
                                                   ((cookie, date.substring(0, date.indexOf(" "))), behavior, (category, goods)) }
 
     val browserRDD = a filter { case ((cookie, date), behaviorID, goodsID) => behaviorID.equals("1000") }
@@ -48,8 +46,7 @@ class BrowserNotBuy extends Tool {
                                     (prefix + item._1, item._2.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).sortWith(_._2 > _._2).map(_._1).distinct.mkString(",")).mkString("#"))})
     browserNotBuy.persist()
     if (redis) {
-      val redisType = if (output.contains("cluster")) "cluster" else "standalone"
-//      saveToRedis(browserNotBuy, accumulator2, redisType)
+      val redisType = if (output.contains("cluster")) RedisClient.cluster else RedisClient.standalone
       RedisClient.sparkKVToRedis(browserNotBuy, accumulator2, redisType)
       Message.addMessage(s"\t$prefix*: $accumulator\n")
       Message.addMessage(s"\t插入 redis $prefix*: $accumulator2\n")
@@ -67,31 +64,6 @@ class BrowserNotBuy extends Tool {
     items.groupBy(_._1).map(s => s._1 + ":" + s._2.map(_._2).mkString(",")).mkString("#")
   }
 
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
-    rdd.foreachPartition(partition => {
-      try {
-        redisType match {
-          case "cluster" =>
-            val jedis = RedisClient.jedisCluster
-            partition.foreach { s =>
-              jedis.set(s._1, s._2)
-              accumulator += 1
-            }
-            jedis.close()
-          case "standalone" =>
-            val jedis = RedisClient.pool.getResource
-            partition.foreach { s =>
-              jedis.set(s._1, s._2)
-              accumulator += 1
-            }
-            jedis.close()
-          case _ => logger.error(s"wrong redis type $redisType ")
-        }
-      } catch {
-        case e: Exception => Message.addMessage(e.getMessage)
-      }
-    })
-  }
 }
 
 object BrowserNotBuy {

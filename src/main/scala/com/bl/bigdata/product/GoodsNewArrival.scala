@@ -22,11 +22,19 @@ import scala.collection.mutable._
  */
 class GoodsNewArrival extends Tool {
 
+  // seconds for key to live
   private var expireTime: Int = 604800
 
   override def run(args: Array[String]): Unit = {
-    val optionsMap = GoodsNewArrayConf.parser(args)
     logger.info("新品上市开始计算........")
+    val optionsMap = try {
+        GoodsNewArrayConf.parser(args)
+      } catch {
+        case e: Throwable =>
+          logger.error("command line parse error : " + e)
+          GoodsNewArrayConf.printHelp
+          return
+      }
     // 输出参数
     optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("\n新商品上市：\n")
@@ -52,7 +60,7 @@ class GoodsNewArrival extends Tool {
     val pcResult = calculate(pcRDD).map(s => (prefixPC + s._1, s._2))
     val pcAccumulator = sc.accumulator(0)
 
-    val redisType = if (output.contains("cluster")) "cluster" else "standalone"
+    val redisType = if (output.contains("cluster")) RedisClient.cluster else RedisClient.standalone
 
     saveToRedis(pcResult, pcAccumulator, redisType)
     Message.addMessage(s"\tpc: 插入 redis $prefixPC* :\t $pcAccumulator")
@@ -61,7 +69,6 @@ class GoodsNewArrival extends Tool {
     val appAccumulator = sc.accumulator(0)
 
     saveToRedis(appResult, appAccumulator, redisType)
-//    RedisClient.sparkKVToRedis(appResult, appAccumulator, redisType)
     Message.addMessage(s"\tpc: 插入 redis $prefixAPP* :\t $appAccumulator")
 
     logger.info("新品上市计算结束。")
@@ -108,20 +115,19 @@ class GoodsNewArrival extends Tool {
 
 
   def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
-    val expireTime = ConfigurationBL.get("goods.new.arrival.expire", "604800").toInt
     rdd.foreachPartition(partition => {
       try {
         redisType match {
           case "cluster" =>
             val jedisCluster = RedisClient.jedisCluster
             partition.foreach { s =>
-              jedisCluster.setex(s._1, expireTime.toInt, s._2)
+              jedisCluster.setex(s._1, expireTime, s._2)
               accumulator += 1
             }
           case "standalone" =>
             val jedis = RedisClient.pool.getResource
             partition.foreach { s =>
-              jedis.setex(s._1, expireTime.toInt, s._2)
+              jedis.setex(s._1, expireTime, s._2)
               accumulator += 1
             }
             jedis.close()
@@ -183,5 +189,6 @@ object GoodsNewArrayConf  {
   def parser(args: Array[String]) : scala.collection.immutable.Map[String, String] = {
     commandLine.parser(args)
   }
+  def printHelp = commandLine.printHelper
 
 }

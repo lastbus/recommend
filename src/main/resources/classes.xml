@@ -22,7 +22,7 @@
         <full-name>com.bl.bigdata.similarity.CategorySimilarity</full-name>
         <short-name>cate.sim</short-name>
         <args></args>
-        <description>购买品类相似度</description>
+        <description>品类买了还买</description>
     </class>
     <class>
         <full-name>com.bl.bigdata.similarity.BuyActivityStatistic</full-name>
@@ -46,7 +46,7 @@
         <full-name>com.bl.bigdata.useranalyze.UserCookie</full-name>
         <short-name>user.cookie</short-name>
         <args></args>
-        <description>用户 id 和 cookie 对应关系</description>
+        <description>用户 id 和 cookie 对应关系, （已弃用）</description>
     </class>
     <class>
         <full-name>com.bl.bigdata.product.GoodsNewArrival</full-name>
@@ -54,13 +54,24 @@
         <args></args>
         <description>新上线商品</description>
     </class>
-<!--
+    <class>
+        <full-name>com.bl.bigdata.product.GoodsForSale</full-name>
+        <short-name>goods</short-name>
+        <args></args>
+        <description>goods and category mapping</description>
+    </class>
     <class>
         <full-name>com.bl.bigdata.tfidf.GoodsSimilarityInCate</full-name>
         <short-name>sim.in.category</short-name>
         <args></args>
-        <description>品类里商品属性的相似度</description>
+        <description>同一品类里商品属性的相似度</description>
     </class>
--->
+
+    <class>
+        <full-name>com.bl.bigdata.similarity.MerchantShopGoods</full-name>
+        <short-name>merchantShopGoods</short-name>
+        <args></args>
+        <description>aggregate merchant goods</description>
+    </class>
 
 </configuration>

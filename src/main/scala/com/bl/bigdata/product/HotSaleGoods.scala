@@ -3,11 +3,14 @@ package com.bl.bigdata.product
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.bl.bigdata.datasource.ReadData
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.spark.Accumulator
-import org.apache.spark.rdd.RDD
+import org.apache.hadoop.hbase.HBaseConfiguration
+import org.apache.hadoop.hbase.client.{Put, Result}
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.mapreduce.TableOutputFormat
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.mapreduce.Job
 
 /**
  * 销量排行：
@@ -17,10 +20,15 @@ import org.apache.spark.rdd.RDD
 class HotSaleGoods extends Tool {
 
   override def run(args: Array[String]): Unit = {
-    val optionsMap = HotSaleConf.parse(args)
-
     logger.info("品类热销开始计算........")
-    // 输出参数
+    val optionsMap = try {
+      HotSaleConf.parse(args)
+    } catch {
+      case e: Throwable =>
+        logger.error("command line parse error: " + e)
+        HotSaleConf.printHelp
+        return
+    }
     optionsMap.foreach { case (k, v) => logger.info(k + " : " + v)}
     Message.addMessage("\n品类热销商品：\n")
 
@@ -42,77 +50,55 @@ class HotSaleGoods extends Tool {
     val date = new Date
     val start = sdf.format(new Date(date.getTime - 24000L * 3600 * 60))
 
-    val sql = s"select goods_sid, goods_name, quanlity, event_date, category_sid " +
-              s" from recommendation.user_behavior_raw_data where dt >= $start and quanlity <> null and quanlity <> '' "
+    val sql = s"select u.goods_sid, u.goods_name, u.quanlity, u.event_date, u.category_sid, g.store_sid " +
+              s" from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid  " +
+              s" where u.dt >= $start and u.quanlity <> null and u.quanlity <> '' "
 
     val sqlName = optionsMap(HotSaleConf.sql)
-    val rawRDD = DataBaseUtil.getData(input, sqlName, start).filter(_.contains(null))
-    val result = rawRDD.filter(s => s != null && s(2).length >= 0 && !s.contains(null) && !s(2).equalsIgnoreCase("NULL") )
-                          .map { case Array(goodsID, goodsName, sale_num, sale_time, categoryID) =>
-                                      (goodsID, goodsName, sale_num.toInt, sale_time, categoryID) }
-                          .map { case (goodsID, goodsName, sale_num, sale_time, categoryID) =>
-                                      (goodsID, (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID))}
+    val rawRDD = DataBaseUtil.getData(input, sqlName, start).filter(a => a(0) != null && a(1) != null && a(2) != null && a(3) != null && a(4) != null)
+    val result = rawRDD.filter(s => s != null && s(2).length >= 0 && !s(2).equalsIgnoreCase("NULL") )
+                          .map { case Array(goodsID, goodsName, sale_num, sale_time, categoryID, storeId) =>
+                                      (goodsID, goodsName, sale_num.toInt, sale_time, categoryID, storeId) }
+                          .map { case (goodsID, goodsName, sale_num, sale_time, categoryID, storeId) =>
+                                      ((goodsID, storeId), (goodsName, if(sale_time >= deadTimeOne) deadTimeOneIndex * sale_num else sale_num, categoryID))}
                           .reduceByKey((s1, s2) => (s1._1, s1._2 + s2._2, s1._3))
-                          .map { case (goodsID, (goodsName, sale_num, categoryID)) =>
-                                      (categoryID, Seq((goodsID, sale_num)))}
+                          .map { case ((goodsID, storeId), (goodsName, sale_num, categoryID)) =>
+                                      ((categoryID, storeId), Seq((goodsID, sale_num)))}
                           .reduceByKey((s1, s2) =>s1 ++ s2)
-                          .map { case (category, seq) => {accumulator += 1; (prefix + category, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#")) }}
+                          .map { case ((category, storeId), seq) =>
+                            accumulator += 1
+                            val key = if (storeId != null && storeId.length > 0 && !storeId.equalsIgnoreCase("NULL")) prefix + storeId + "_" + category else prefix + category
+                            (key, seq.sortWith(_._2 > _._2).take(20).map(_._1).mkString("#"))
+                          }
     result.cache()
     if(redis) {
-      val redisType = if (output.contains("cluster")) "cluster" else "standalone"
-//      sc.toRedisKV(result)
-//      saveToRedis(result, accumulator2, redisType)
+      val redisType = if (output.contains("cluster")) RedisClient.cluster else RedisClient.standalone
       RedisClient.sparkKVToRedis(result, accumulator2, redisType)
       Message.addMessage(s"\t$prefix*: $accumulator\n")
       Message.addMessage(s"\t插入 redis $prefix*: $accumulator2\n")
     }
 
     if (hbase){
-//      val conf = HBaseConfiguration.create()
-//      conf.set(TableOutputFormat.OUTPUT_TABLE, "h1")
-//      val columnFamilyBytes = Bytes.toBytes("c1")
-//      val columnNameBytes = Bytes.toBytes("hot_sale")
-//      val c = sc.hadoopConfiguration
-//      c.set(TableOutputFormat.OUTPUT_TABLE, "h1")
-//      val job = Job.getInstance(c)
-//      job.setOutputFormatClass(classOf[TableOutputFormat[Put]])
-//      job.setOutputKeyClass(classOf[ImmutableBytesWritable])
-//      job.setOutputValueClass(classOf[Result])
-//      result.map{ case (k, v) => {
-//        val put = new Put(Bytes.toBytes(k))
-//        (new ImmutableBytesWritable(k.getBytes()), put.addColumn(columnFamilyBytes, columnNameBytes, Bytes.toBytes(v)))
-//      }}.saveAsNewAPIHadoopDataset(job.getConfiguration)
-
+      // not use temporary
+      val conf = HBaseConfiguration.create()
+      conf.set(TableOutputFormat.OUTPUT_TABLE, "h1")
+      val columnFamilyBytes = Bytes.toBytes("c1")
+      val columnNameBytes = Bytes.toBytes("hot_sale")
+      val c = sc.hadoopConfiguration
+      c.set(TableOutputFormat.OUTPUT_TABLE, "h1")
+      val job = Job.getInstance(c)
+      job.setOutputFormatClass(classOf[TableOutputFormat[Put]])
+      job.setOutputKeyClass(classOf[ImmutableBytesWritable])
+      job.setOutputValueClass(classOf[Result])
+      result.map{ case (k, v) => {
+        val put = new Put(Bytes.toBytes(k))
+        (new ImmutableBytesWritable(k.getBytes()), put.addColumn(columnFamilyBytes, columnNameBytes, Bytes.toBytes(v)))
+      }}.saveAsNewAPIHadoopDataset(job.getConfiguration)
     }
     result.unpersist()
     logger.info("品类热销计算结束。")
   }
 
-  def saveToRedis(rdd: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
-    rdd.foreachPartition(partition => {
-      try {
-        redisType match {
-          case "cluster" =>
-            val jedis = RedisClient.jedisCluster
-            partition.foreach { s =>
-              jedis.set(s._1, s._2)
-              accumulator += 1
-            }
-            jedis.close()
-          case "standalone" =>
-            val jedis = RedisClient.pool.getResource
-            partition.foreach { s =>
-              jedis.set(s._1, s._2)
-              accumulator += 1
-            }
-            jedis.close()
-          case _ => logger.error(s"wrong redis type $redisType ")
-        }
-      } catch {
-        case e: Exception => Message.addMessage(e.getMessage)
-      }
-    })
-  }
 }
 
 object HotSaleGoods {
@@ -159,12 +145,14 @@ object HotSaleConf  {
   buyGoodsSimCommand.addOption("i", input, true, "data.source", "hive")
   buyGoodsSimCommand.addOption("o", output, true, "output data to redis， hbase or HDFS", "redis-cluster")
   buyGoodsSimCommand.addOption(sql, sql, true, "user.behavior.raw.data", "hot.sale")
-  buyGoodsSimCommand.addOption("pm", goodsIdPrefix, true, "goods id prefix", "rcmd_cookieid_view_")
+  buyGoodsSimCommand.addOption("pm", goodsIdPrefix, true, "goods id prefix", "rcmd_cate_hotsale_")
   buyGoodsSimCommand.addOption("n", days, true, "days before today", "30")
   buyGoodsSimCommand.addOption("sdf", sdf, true, "date format", "yyyyMMdd")
 
   def parse(args: Array[String]): Map[String, String] ={
     buyGoodsSimCommand.parser(args)
   }
+
+  def printHelp = buyGoodsSimCommand.printHelper
 
 }

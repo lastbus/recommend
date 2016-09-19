@@ -9,6 +9,7 @@ import org.apache.spark.rdd.RDD
 /**
   * Created by MK33 on 2016/4/11.
   */
+@Deprecated
 class UserCookie extends Tool {
 
   override def run(args: Array[String]): Unit = {
@@ -26,12 +27,10 @@ class UserCookie extends Tool {
     val r = rawRDD.map(r => (r._1, Seq((r._2, r._3)))).reduceByKey(_ ++ _)
                   .map(r => { count += 1
                     ("member_cookie_" + r._1, r._2.sortWith(_._2 > _._2).map(_._1).distinct.mkString("#"))})
-    val redisType = if (output.contains("cluster")) "cluster" else "standalone"
-//    saveListToRedis(r, count2)
+    val redisType = if (output.contains(RedisClient.cluster)) RedisClient.cluster else RedisClient.standalone
     RedisClient.sparkKVToRedis(r, count2, redisType)
     Message.addMessage(s"\t member_cookie_*： $count \n")
     Message.addMessage(s"\t插入 redis member_cookie_*： $count2 \n")
-
     logger.info("用户cookie 和用户id 计算结束。")
   }
 

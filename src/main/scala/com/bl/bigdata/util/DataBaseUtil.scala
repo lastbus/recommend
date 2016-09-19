@@ -49,9 +49,6 @@ object DataBaseUtil {
     val tmp = hiveSqls(sqls(0))
     val sql = if (sqls.length > 1) String.format(tmp, sqls.tail:_*) else tmp
     val hiveContext = SparkFactory.getHiveContext
-//    hiveContext.sql(sql).rdd.map(row => if (row.anyNull) null else row.toSeq.map(_.toString).toArray)
-//      .filter(_ != null)
-//    hiveContext.sql(sql).rdd.map(row => row.toSeq.map(_.toString).toArray)
     hiveContext.sql(sql).map(row =>   row.toSeq.map( r => if (r == null) null else r.toString).toArray )
   }
 
