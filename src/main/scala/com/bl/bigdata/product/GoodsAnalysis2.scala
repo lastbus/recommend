@@ -11,7 +11,6 @@ import org.apache.hadoop.hbase.mapreduce.{TableInputFormat, TableOutputFormat}
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.logging.log4j.LogManager
-import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
 
@@ -38,13 +37,15 @@ object GoodsAnalysis2 {
 
     val cal = Calendar.getInstance()
     cal.setTime(new Date())
-    val oneMonthAgo = cal.add(Calendar.MONTH, -1)
-    val threeMonthAgo = cal.add(Calendar.MONTH, -2)
+    val sdf = new SimpleDateFormat("yyyyMMdd")
+    val oneMonthAgo = {cal.add(Calendar.MONTH, -1); sdf.format(cal.getTime)}
+    val threeMonthAgo = {cal.add(Calendar.MONTH, -2); sdf.format(cal.getTime)}
 
     // ======================   product information   =======================
     val productBytes = Bytes.toBytes("product")
 
-    val sql0 = "select category_id, count(distinct sid), count(distinct brand_sid), count(distinct pro_sid) from recommendation.goods_avaialbe_for_sale_channel  "
+    val sql0 = "select category_id, count(distinct sid), count(distinct brand_sid), count(distinct pro_sid) " +
+      "from recommendation.goods_avaialbe_for_sale_channel  group by category_id "
     val goodsRawRDD = hiveContext.sql(sql0).map { row =>
       if (row.anyNull) null else (row.getLong(0).toString, (row.getLong(1).toInt, row.getLong(2).toInt, row.getLong(3).toInt))
     }
@@ -89,7 +90,7 @@ object GoodsAnalysis2 {
     //   ============  price zone  ===========
     val sql1 = "select category_id, sale_price  from recommendation.goods_avaialbe_for_sale_channel  "
     val goodsRawRDD2 = hiveContext.sql(sql1).map { row =>
-      if (row.anyNull) null else (row.getLong(0).toString , row.getDouble(2))
+      if (row.anyNull) null else (row.getLong(0).toString , row.getDouble(1))
     }
     val validateGoodsRDD = goodsRawRDD2.filter(_!=null)
     val priceZoneRDD = validateGoodsRDD.map(s => (s._1, Seq(s._2))).reduceByKey(_ ++ _).mapValues(s => (s.min, s.max))
@@ -120,13 +121,13 @@ object GoodsAnalysis2 {
     val goodsRawRDD3 = hiveContext.sql(sql2).map(row => if (row.anyNull) null else (row.getLong(0).toString, (row.getString(1), row.getString(2), row.getDouble(3))))
     goodsRawRDD3.filter(_!=null).map(s => (s._1, Seq(s._2))).reduceByKey(_ ++ _).join(priceZoneRDDTmp).map { case (cate, (goods, priceArray)) =>
         val put = new Put(Bytes.toBytes(cate))
-        val r = for (i <- 0 until priceArray.length) yield {
-          val n = goods.filter(s => s._3 >= priceArray(i) && s._3 < priceArray(i + 1))
+        val r = for (i <- 1 until priceArray.length) yield {
+          val n = goods.filter(s => s._3 >= priceArray(i - 1) && s._3 < priceArray(i))
           if (n!=null) (i + ":" + n.map(_._1).distinct.length, i + ":" + n.map(_._2).distinct.length)
           else (i + ":" + 0, i + ":" + 0)
         }
-        put.addColumn(productBytes, Bytes.toBytes("price_zone_goods_count"), Bytes.toBytes(r.map(_._1).mkString(",")))
-        put.addColumn(productBytes, Bytes.toBytes("price_zone_brand_count"), Bytes.toBytes(r.map(_._2).mkString(",")))
+        put.addColumn(productBytes, Bytes.toBytes("price_zone_goods_count"), Bytes.toBytes(r.map(_._1).mkString("#")))
+        put.addColumn(productBytes, Bytes.toBytes("price_zone_brand_count"), Bytes.toBytes(r.map(_._2).mkString("#")))
       (new ImmutableBytesWritable(Bytes.toBytes(cate)), put)
     }.saveAsNewAPIHadoopDataset(job.getConfiguration)
 
@@ -135,16 +136,16 @@ object GoodsAnalysis2 {
 
 
     val oneMonthAgoOrderSql = " select  category_id,  sum(sale_price), sum(sale_sum), count(distinct member_id)  " +
-      s" from recommendation.order_info where  dt >= ${oneMonthAgo}  and ORDER_STATUS NOT IN ('1001', '1029', '1100') "
+      s" from recommendation.order_info where  dt >= ${oneMonthAgo}  and ORDER_STATUS NOT IN ('1001', '1029', '1100') group by category_id "
 
     val threeMothAgoOrderSql = " select  category_id,  sum(sale_price), sum(sale_sum), count(distinct member_id) " +
-      s" from recommendation.order_info where  dt >= ${threeMonthAgo}  and ORDER_STATUS NOT IN ('1001', '1029', '1100')"
+        s" from recommendation.order_info where  dt >= ${threeMonthAgo}  and ORDER_STATUS NOT IN ('1001', '1029', '1100')  group by category_id"
 
     val orderSql = " select  category_id,  sale_price, sale_sum, distinct member_id  " +
-      s" from recommendation.order_info where  ORDER_STATUS NOT IN ('1001', '1029', '1100') "
+      s" from recommendation.order_info where  ORDER_STATUS NOT IN ('1001', '1029', '1100')  "
 
     val oneMonthRDD = hiveContext.sql(oneMonthAgoOrderSql).map { row =>
-      if (row.anyNull) null else (row.getString(0), (row.getDouble(1), row.getDouble(2), row.getLong(3).toInt))
+      if (row.anyNull) null else (row.getLong(0).toString, (row.getDouble(1), row.getDouble(2), row.getLong(3).toInt))
     }
 
     oneMonthRDD.filter(_!=null).map { s =>
@@ -157,7 +158,7 @@ object GoodsAnalysis2 {
 
 
     val threeMonthRDD = hiveContext.sql(threeMothAgoOrderSql).map{ row =>
-      if (row.anyNull) null else (row.getString(0), (row.getDouble(1), row.getDouble(2), row.getLong(3).toInt))
+      if (row.anyNull) null else (row.getLong(0).toString, (row.getDouble(1), row.getDouble(2), row.getLong(3).toInt))
     }
 
     logger.info(s"invalid three month order number is :  ${threeMonthRDD.filter(_==null).count()}")
@@ -177,7 +178,7 @@ object GoodsAnalysis2 {
       s"  from recommendation.order_info where  dt >= ${threeMonthAgo}  " +
       s"  and  ORDER_STATUS NOT IN ('1001', '1029', '1100')  GROUP BY category_id having count(member_id) >=  2 "
 
-    val buyAgainRDD = hiveContext.sql(buyAgain).map(row => if (row.anyNull) null else (row.getString(0), row.getLong(1).toInt))
+    val buyAgainRDD = hiveContext.sql(buyAgain).map(row => if (row.anyNull) null else (row.getLong(0).toString, row.getLong(1).toInt))
     logger.info("invalid buy again record number is : " + buyAgainRDD.filter(_== null).count())
     hiveContext.sparkContext.newAPIHadoopRDD(hBaseConf, classOf[TableInputFormat], classOf[ImmutableBytesWritable], classOf[Result]).map(_._2).map { result =>
       val key = Bytes.toString(result.getRow)
@@ -191,49 +192,6 @@ object GoodsAnalysis2 {
     }.saveAsNewAPIHadoopDataset(job.getConfiguration)
 
 
-    /**
-      * tmpRDD.join(validateThreeMonthOrderRDD).map { case (cate, ((saleMoney1, saleNumber1, customer1), (saleMoney2, saleNumber2, customer2))) =>
-      * val put = new Put(Bytes.toBytes(cate))
-      * put.addColumn(productBytes, Bytes.toBytes("growth_of_sales"), Bytes.toBytes((saleMoney2 - saleMoney1) / saleMoney1))
-      * put.addColumn(productBytes, Bytes.toBytes("growth_of_sales_number"), Bytes.toBytes((saleNumber2 - saleNumber2) / saleNumber2))
-      * (new ImmutableBytesWritable(Bytes.toBytes(cate)), put)
-      * }.saveAsNewAPIHadoopDataset(job.getConfiguration)
-      **
-      *val allSaleOrderRDD = hiveContext.sql(orderSql).map { row => if (row.anyNull) null else (row.getString(0), row.getDouble(1), row.getDouble(2).toInt, row.getLong(3).toInt)}
-      **
-      *logger.info(s"invalid all sale order number is : ${allSaleOrderRDD.filter(_==null).count()} " )
-      *val tmpRDD3 = allSaleOrderRDD.filter(_!=null).map { case (cate, saleMoney, saleNum, memberNum) =>
-      *(cate, (saleMoney, saleNum, memberNum))
-      * }
-      **
-      *tmpRDD3.join(tmpRDD).map { case (cate, ((saleMoney, saleNum, memberNum), (saleMoney1, saleNum1, memberNum1))) =>
-      *val put = new Put(Bytes.toBytes(cate))
-      *put.addColumn(productBytes, Bytes.toBytes("one_month_sale_money_rate"), Bytes.toBytes(saleMoney1 / saleMoney))
-      *put.addColumn(productBytes, Bytes.toBytes("one_month_sale_number_rate"), Bytes.toBytes(saleNum1.toDouble / saleNum))
-      *(new ImmutableBytesWritable(Bytes.toBytes(cate)), put)
-      *}.saveAsNewAPIHadoopDataset(job.getConfiguration)
-      **
- *tmpRDD3.join(validateThreeMonthOrderRDD).map { case (cate, ((saleMoney, saleNum, memberNum), (saleMoney1, saleNum1, memberNum1))) =>
-      *val put = new Put(Bytes.toBytes(cate))
-      *put.addColumn(productBytes, Bytes.toBytes("three_month_sale_money_rate"), Bytes.toBytes(saleMoney1 / saleMoney))
-      *put.addColumn(productBytes, Bytes.toBytes("three_month_sale_number_rate"), Bytes.toBytes(saleNum1.toDouble / saleNum))
-      *(new ImmutableBytesWritable(Bytes.toBytes(cate)), put)
-      *}.saveAsNewAPIHadoopDataset(job.getConfiguration)
-      **
-      *
- *val sc = hiveContext.sparkContext.newAPIHadoopRDD(hBaseConf2, classOf[TableInputFormat], classOf[ImmutableBytesWritable], classOf[Result]).map(_._2).map { result =>
-      *val oneMonth = Bytes.toDouble(result.getValue(productBytes, Bytes.toBytes("one_month_sale_money_rate")))
-      *val threeMonth = Bytes.toDouble(result.getValue(productBytes, Bytes.toBytes("three_month_sale_money_rate")))
-      *val oneMonth2 = Bytes.toDouble(result.getValue(productBytes, Bytes.toBytes("one_month_sale_number_rate")))
-      *val threeMonth2 = Bytes.toDouble(result.getValue(productBytes, Bytes.toBytes("three_month_sale_number_rate")))
-      *val put = new Put(result.getRow)
-      *put.addColumn(productBytes, Bytes.toBytes("sale_money_rate"), Bytes.toBytes((threeMonth - oneMonth) / oneMonth ))
-      *put.addColumn(productBytes, Bytes.toBytes("sale_number_rate"), Bytes.toBytes((threeMonth2 - oneMonth2) / oneMonth2))
-      *(new ImmutableBytesWritable(result.getRow), put)
-      *}.saveAsNewAPIHadoopDataset(job.getConfiguration)
-      *
- */
-
     //  ====================   动销率  =================
     val goodsSql2 = "  select category_id, count(distinct goods_sid), count(distinct brand_sid)  " +
             s"  from recommendation.order_info where  dt >= ${oneMonthAgo}  and  ORDER_STATUS NOT IN ('1001', '1029', '1100')  " +
@@ -242,7 +200,7 @@ object GoodsAnalysis2 {
             s"  from recommendation.order_info where  dt >= ${threeMonthAgo}  and  ORDER_STATUS NOT IN ('1001', '1029', '1100')  " +
             s"  GROUP BY category_id  "
 
-    val soldGoodsCountRDD = hiveContext.sql(goodsSql2).map(row => if (row.anyNull) null else (row.getString(0), (row.getLong(1).toInt, row.getLong(2).toInt))).filter(_!=null)
+    val soldGoodsCountRDD = hiveContext.sql(goodsSql2).map(row => if (row.anyNull) null else (row.getLong(0).toString, (row.getLong(1).toInt, row.getLong(2).toInt))).filter(_!=null)
     val hbaseGoodsRDD = hiveContext.sparkContext.newAPIHadoopRDD(hBaseConf, classOf[TableInputFormat], classOf[ImmutableBytesWritable], classOf[Result]).map(_._2).map { result =>
       val cate = Bytes.toString(result.getRow)
       val n1 = result.getValue(productBytes, Bytes.toBytes("goods_sum"))
@@ -257,7 +215,7 @@ object GoodsAnalysis2 {
       (new ImmutableBytesWritable(Bytes.toBytes(cate)), put)
     }.saveAsNewAPIHadoopDataset(job.getConfiguration)
 
-    val soldGoodsCountRDD3 = hiveContext.sql(goodsSql3).map(row => if (row.anyNull) null else (row.getString(0), (row.getLong(1).toInt, row.getLong(2).toInt))).filter(_!=null)
+    val soldGoodsCountRDD3 = hiveContext.sql(goodsSql3).map(row => if (row.anyNull) null else (row.getLong(0).toString, (row.getLong(1).toInt, row.getLong(2).toInt))).filter(_!=null)
     hbaseGoodsRDD.join(soldGoodsCountRDD3).map{ case (cate, ((soldGoods, soldBrand), (goods, brand))) =>
       val put = new Put(Bytes.toBytes(cate))
       put.addColumn(productBytes, Bytes.toBytes("goods_dynamic_pin_ratio_90"), Bytes.toBytes(soldGoods.toDouble / goods))
@@ -273,50 +231,120 @@ object GoodsAnalysis2 {
       val saleAmt30 = result.getValue(productBytes, Bytes.toBytes("one_month_sale_number"))
       val saleAmt90 = result.getValue(productBytes, Bytes.toBytes("three_month_sale_number"))
       val put = new Put(key)
-      if (saleAmt30 == null | saleAmt90 == null) {
+      if (saleAmt30 != null && saleAmt90 != null) {
         put.addColumn(productBytes, Bytes.toBytes("growth_of_sales"), Bytes.toBytes(3 * Bytes.toInt(saleAmt30).toDouble / Bytes.toInt(saleAmt90)))
       }
-      if (saleMoney30 == null | saleMoney90 == null) {
+      if (saleMoney30 != null && saleMoney90 != null) {
         put.addColumn(productBytes,  Bytes.toBytes("growth_of_sales_number"), Bytes.toBytes(3 * Bytes.toInt(saleMoney30).toDouble / Bytes.toInt(saleMoney90)))
       }
+      if (put.isEmpty) null else
       (new io.ImmutableBytesWritable(key), put)
-    }.saveAsNewAPIHadoopDataset(job.getConfiguration)
+    }.filter(_!=null).saveAsNewAPIHadoopDataset(job.getConfiguration)
 
     // =========================
-    val goodsSql4 = "select  category_id, sale_time, member_id, sid, sale_price, order_no  " +
+    val goodsSql4 = " select  category_id, sale_time, member_id, goods_sid, sale_price, order_no  " +
                     s" from recommendation.order_info where  dt >= ${threeMonthAgo}  and  ORDER_STATUS NOT IN ('1001', '1029', '1100') "
 
     val goodsRawRDD5 = hiveContext.sql(goodsSql4).map { row => if (row.anyNull) null
-    else  (row.getLong(0).toString, Seq((row.getString(1), row.getString(2), row.getString(3), row.getDouble(4), row.getString(5)))) }.reduceByKey(_ ++_).map { case (cate, goods) =>
-        val sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss")
-        //  计算品类平均购买周期, 单位是天
-        val averageTime = goods.map(s => (s._1, s._2)).groupBy(_._2).filter(_._2.size >= 2).map { case (member, dayTimeString) =>
-            dayTimeString.map(s=>(sdf.parse(s._1).getTime, s._2)).map(_._1).sorted.sliding(2, 1).foldLeft(0L)((a: Long, b: Seq[Long]) => a + b(1) - b(0))
-          (sdf.parse(dayTimeString.last._1).getTime - sdf.parse(dayTimeString.head._1).getTime, dayTimeString.length - 1)
-        }.foldLeft((0L, 0))((a: (Long, Int), b: (Long, Int)) => (a._1 + b._1, a._2 + b._2))
-        val averageBuyPeriod = averageTime._1.toDouble / averageTime._2 / 24 / 3600000
+    else  (row.getLong(0).toString, Seq((row.getString(1), row.getString(2), row.getString(3), row.getDouble(4), row.getString(5)))) }.filter(_!=null).reduceByKey(_ ++_).map { case (cate, goods) =>
+        if (goods.isEmpty) null else {
+          val put = new Put(Bytes.toBytes(cate))
+          val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+          //  计算品类平均购买周期, 单位是天
+          val averageTime = goods.map(s => (s._1, s._2)).groupBy(_._2).filter(_._2.size >= 2)
+          if (!averageTime.isEmpty) {
+            val tmp0 = averageTime.map { case (member, dayTimeString) =>
+              val t = dayTimeString.map(s=>sdf.parse(s._1).getTime).sorted
+              (t.last - t.head, t.length - 1)
+            }.foldLeft((0L, 0))((a: (Long, Int), b: (Long, Int)) => (a._1 + b._1, a._2 + b._2))
+            val averageBuyPeriod = tmp0._1.toDouble / tmp0._2 / 24 / 3600000
+            put.addColumn(productBytes, Bytes.toBytes("average_period"), Bytes.toBytes(averageBuyPeriod))
+          }
 
-        val minPrice = goods.minBy(_._4)._3
-        val maxPrice = goods.maxBy(_._4)._3
-        val goodsCountMap = mutable.Map[String, Int]()
-        goods.map(_._3).map ( g => goodsCountMap(g) = goodsCountMap.getOrElse(g, 0) + 1 )
-        val hotsales = goodsCountMap.toVector.sortWith( _._2 > _._2).take(10).mkString(",")
+          val minPrice = goods.minBy(_._4)._4
+          val maxPrice = goods.maxBy(_._4)._4
+          val goodsCountMap = mutable.Map[String, Int]()
+          goods.map(_._3).map ( g => goodsCountMap(g) = goodsCountMap.getOrElse(g, 0) + 1 )
+          val hotsales = if (goodsCountMap.isEmpty) "null"  else goodsCountMap.toVector.sortWith( _._2 > _._2).take(10).map(_._1).mkString(",")
 
-        // 平均客单价 订单商品数
-        val memberOrders = goods.map(s => (s._5, (s._3, s._4))).groupBy(_._1)
-        val averageOrderGoodsNum = memberOrders.map(s=> s._2.length).sum.toDouble / memberOrders.size
-        val averageOrderPrice = memberOrders.map(_._2.map(_._2._2).sum).sum / memberOrders.size
+          // 平均客单价 订单商品数
+          val memberOrders = goods.map(s => (s._5, (s._3, s._4))).groupBy(_._1)
+          val averageOrderGoodsNum = memberOrders.map(s=> s._2.length).sum.toDouble / memberOrders.size
+          val averageOrderPrice = memberOrders.map(_._2.map(_._2._2).sum).sum / memberOrders.size
+
+          put.addColumn(productBytes, Bytes.toBytes("average_order_price"), Bytes.toBytes(averageOrderPrice))
+          put.addColumn(productBytes, Bytes.toBytes("average_order_number"), Bytes.toBytes(averageOrderGoodsNum))
+          put.addColumn(productBytes, Bytes.toBytes("lowest_goods_price"), Bytes.toBytes(minPrice))
+          put.addColumn(productBytes, Bytes.toBytes("higest_goods_price"), Bytes.toBytes(maxPrice))
+          put.addColumn(productBytes, Bytes.toBytes("hotsale_top_10"), Bytes.toBytes(hotsales))
+          (new ImmutableBytesWritable(Bytes.toBytes(cate)), put)
+        }
+
+    }.filter(_ != null).saveAsNewAPIHadoopDataset(job.getConfiguration)
+
+
+    // ==============  price zone compute  =================
+    val orderSql4 = "  select category_id, goods_sid, brand_sid , sale_price  " +
+      s"  from recommendation.order_info where  dt >= ${threeMonthAgo}  and  ORDER_STATUS NOT IN ('1001', '1029', '1100')  "
+    val threeOrderRDD = hiveContext.sql(orderSql4).map(row=> if (row.anyNull) null else (row.getLong(0).toString, (row.getString(1), row.getString(2), row.getDouble(3)))).filter(_ != null)
+
+    val tmpPrizeZone = hiveContext.sparkContext.newAPIHadoopRDD(hBaseConf, classOf[TableInputFormat], classOf[ImmutableBytesWritable], classOf[Result]).map(_._2).map { r =>
+      val key = r.getRow
+      val g = r.getValue(productBytes, Bytes.toBytes("goods_count"))
+      val b = r.getValue(productBytes, Bytes.toBytes("brand_count"))
+//      val p = r.getValue(productBytes, Bytes.toBytes("product_count"))
+      val priceZone = r.getValue(productBytes, Bytes.toBytes("price_zone"))
+
+      if (g == null | b == null  | priceZone == null) null
+      else (Bytes.toString(key), (Bytes.toInt(g), Bytes.toInt(b), Bytes.toString(priceZone).split(",").map(_.toDouble)))
+    }.filter(_ != null)
+
+    threeOrderRDD.map(s=> (s._1, Seq(s._2))).reduceByKey(_ ++ _).join(tmpPrizeZone).map { case (cate, (goods, (g, b, priceZone))) =>
+        val maxPrice = goods.maxBy(_._3)._3
+        val minPrice = goods.minBy(_._3)._3
+
+        val c = for (i <- 1 until priceZone.length) yield {
+          val tmp = goods.filter(s=> s._3 >= priceZone(i - 1) && s._3 < priceZone(i))
+          val g0 = tmp.map(_._1).distinct.length
+          val b0 = tmp.map(_._2).distinct.length
+          val p0 = tmp.map(_._3).sum
+          (i + ":" + g0, i + ":"+ b0, i+";"+ p0, i + ":" + (g0.toDouble / g), i + ":" + (b0.toDouble / b))
+        }
 
         val put = new Put(Bytes.toBytes(cate))
-        put.addColumn(productBytes, Bytes.toBytes("average_period"), Bytes.toBytes(averageBuyPeriod))
-        put.addColumn(productBytes, Bytes.toBytes("average_order_price"), Bytes.toBytes(averageOrderPrice))
-        put.addColumn(productBytes, Bytes.toBytes("average_order_number"), Bytes.toBytes(averageOrderGoodsNum))
-        put.addColumn(productBytes, Bytes.toBytes("lowest_goods_price"), Bytes.toBytes(minPrice))
-        put.addColumn(productBytes, Bytes.toBytes("higest_goods_price"), Bytes.toBytes(maxPrice))
-        put.addColumn(productBytes, Bytes.toBytes("hotsale_top_10"), Bytes.toBytes(hotsales))
+        put.addColumn(productBytes, Bytes.toBytes("price_zone_sale_goods_count_90"), Bytes.toBytes(c.map(_._1).mkString("#")))
+        put.addColumn(productBytes, Bytes.toBytes("price_zone_sale_brand_count_90"), Bytes.toBytes(c.map(_._2).mkString("#")))
+        put.addColumn(productBytes, Bytes.toBytes("price_zone_sales_90"), Bytes.toBytes(c.map(_._3).mkString("#")))
+        put.addColumn(productBytes, Bytes.toBytes("price_zone_goods_dynamic_90"), Bytes.toBytes(c.map(_._4).mkString("#")))
+        put.addColumn(productBytes, Bytes.toBytes("price_zone_brand_dynamic_90"), Bytes.toBytes(c.map(_._5).mkString("#")))
+
+        val sales = goods.map(_._3).sum
+        val goodsCount = goods.map(_._1).distinct.length
+        val sortedBySales = goods.map(s => (s._1, s._3)).groupBy(_._1).map ( s => (s._1, s._2.map(_._2).sum)).toArray.sortWith(_._2 > _._2)
+        val tenPercent = sortedBySales.take(if (goodsCount / 10 == 0) 1 else goodsCount / 10).map(_._2).sum / sales
+        val twentyPercent = sortedBySales.take((if (goodsCount / 10 == 0) 1 else 2 * goodsCount / 10)).map(_._2).sum / sales
+        put.addColumn(productBytes, Bytes.toBytes("ten_percent_goods_sales"), Bytes.toBytes(tenPercent))
+        put.addColumn(productBytes, Bytes.toBytes("twenty_percent_goods_sales"), Bytes.toBytes(twentyPercent))
 
       (new ImmutableBytesWritable(Bytes.toBytes(cate)), put)
+
+
     }.saveAsNewAPIHadoopDataset(job.getConfiguration)
+
+
+    // sales money
+    val orderSql5 = "  select  goods_sid , sale_price, dt  " +
+      s"  from recommendation.order_info where  ORDER_STATUS NOT IN ('1001', '1029', '1100')  "
+
+    val tt = hiveContext.sql(orderSql5).map(row => if (row.anyNull) null else (row.getString(0), row.getDouble(1), row.getString(2))).filter(_!=null)
+
+    val sum = tt.map(_._2).sum()
+    val goodsNumber = tt.map(_._1).distinct().count()
+    val goodsSales = tt.filter(_._3 >= threeMonthAgo).map(s=>(s._1, s._2)).reduceByKey(_ + _).top(goodsNumber.toInt / 10).map(_._2).sum
+    val goodsSales2 = tt.filter(_._3 >= threeMonthAgo).map(s=>(s._1, s._2)).reduceByKey(_ + _).top(2 * goodsNumber.toInt / 10).map(_._2).sum
+
+
+
 
 
 

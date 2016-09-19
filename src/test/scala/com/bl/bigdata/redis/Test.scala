@@ -12,6 +12,10 @@ object Test {
 
 
     val jedis = new Jedis("10.201.128.216")
+    val jedis0 = new Jedis("10.201.32.164")
+    jedis0.auth("Red1s")
+
+    jedis0.keys("*")
     jedis.set("a", "a")
     jedis.hmset("rcmd_rt_view_" + "0", Map("a" -> "b"))
     jedis.close()

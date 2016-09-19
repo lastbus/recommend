@@ -19,7 +19,7 @@
     <sql>
         <name>search.category.0</name>
         <value>
-            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,
                     g.brand_sid, g.pro_sid
             FROM idmdata.dim_search_category c
             INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '%s' </value>
@@ -28,7 +28,7 @@
     <sql>
         <name>search.category.1</name>
         <value>
-            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,
                     g.brand_sid, g.pro_sid, n.sale_cum_amount, n.index_type
             FROM idmdata.m_sr_eg_goods_num_amount n
             INNER JOIN idmdata.dim_search_category c ON c.goods_sid = n.goods_code
@@ -85,27 +85,27 @@
     <sql>
         <name>search.category.score.spu</name>
         <value>
-            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,
                     bd.sid, g.pro_sid
             FROM idmdata.dim_search_category c
             INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '%s' and isnotnull(g.brand_sid) and g.brand_sid  &lt;&gt; 'null'
             INNER JOIN sourcedata.s06_pcm_brand_relation br on g.brand_sid = br.brand_sid AND br.dt = '%s'
             INNER JOIN sourcedata.s06_pcm_brand_display bd on bd.sid = br.brand_display_sid AND bd.dt = '%s'
-            WHERE isnotnull(bd.sid) AND bd.sid &lt;&gt; 'null'
+            WHERE isnotnull(bd.sid) AND bd.sid &lt;&gt; 'null' AND isnotnull(c.channel_sid) AND c.channel_sid &lt;&gt; 'null'
         </value>
     </sql>
 
     <sql>
         <name>search.category.score.sell</name>
         <value>
-            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid,
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,
                     bd.sid, g.pro_sid, n.sale_cum_amount, n.index_type
             FROM idmdata.m_sr_eg_goods_num_amount n
             INNER JOIN idmdata.dim_search_category c ON c.goods_sid = n.goods_code
             INNER JOIN sourcedata.s06_pcm_mdm_goods g ON g.sid = n.goods_code AND g.dt = '%s'
             INNER JOIN sourcedata.s06_pcm_brand_relation br ON br.brand_sid = g.brand_sid AND br.dt = '%s'
             INNER JOIN sourcedata.s06_pcm_brand_display bd ON bd.sid = br.brand_display_sid AND bd.dt = '%s'
-            where n.cdate = '%s'  and (isnotnull(g.brand_sid) and g.brand_sid &lt;&gt; 'null')
+            where n.cdate = '%s'  AND isnotnull(g.brand_sid) AND g.brand_sid &lt;&gt; 'null' AND isnotnull(c.channel_sid) AND c.channel_sid &lt;&gt; 'null'
         </value>
     </sql>
 

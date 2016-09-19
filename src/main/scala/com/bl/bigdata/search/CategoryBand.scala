@@ -41,38 +41,38 @@ object CategoryBand {
       cal.add(Calendar.DAY_OF_MONTH, -1)
       val date = if (options.contains(CategoryScoreConf.date)) options(CategoryScoreConf.date)  else sdf.format(cal.getTime)
 
-      val sqlSpu0 = " SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, " +
+      val sqlSpu0 = " SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid, " +
         "         g.brand_sid, g.pro_sid  " +
         " FROM idmdata.dim_search_category c  " +
         s" INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '$date' " +
         s" where isnotnull(g.brand_sid) and g.brand_sid <> 'null' "
 
-      val spuRDD = DataBaseUtil.getData(input, sqlSpu, date, date, date).map { case Array(lev1, lev2, lev3, lev4, lev5, brand, productId) =>
-        ((lev1, lev2, lev3, lev4, lev5, brand), productId)
-      }.distinct().mapValues(_ => 1).reduceByKey(_ + _).map { s => ((s._1._1,s._1._2,s._1._3, s._1._4, s._1._5), Seq((s._1._6, s._2)))}.reduceByKey(_ ++ _)
-        .map{ case (a, s) =>
+      val spuRDD = DataBaseUtil.getData(input, sqlSpu, date, date, date).map { case Array(lev1, lev2, lev3, lev4, lev5, channel, brand, productId) =>
+        ((lev1, lev2, lev3, lev4, lev5, channel, brand), productId)
+      }.distinct().mapValues(_ => 1).reduceByKey(_ + _).map { s => ((s._1._1,s._1._2,s._1._3, s._1._4, s._1._5, s._1._6), Seq((s._1._7, s._2)))}.reduceByKey(_ ++ _)
+        .map { case (a, s) =>
           val min = s.minBy(_._2)._2
           val max = s.maxBy(_._2)._2
           val divide = if (min == max) 1 else max - min
-          s.map(t => ((a._1, a._2, a._3, a._4, a._5, t._1), 30.0 * (t._2 - min) / divide))
+          s.map(t => ((a._1, a._2, a._3, a._4, a._5, a._6, t._1), 30.0 * (t._2 - min) / divide))
         }.flatMap(s => s)
 
-      val sqlSell0 = " SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, " +
+      val sqlSell0 = " SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,  " +
         "         g.brand_sid, g.pro_sid, n.sale_cum_amount, n.index_type  " +
         " FROM idmdata.m_sr_eg_goods_num_amount n " +
         " INNER JOIN idmdata.dim_search_category c ON c.goods_sid = n.goods_code  " +
         s" INNER JOIN sourcedata.s06_pcm_mdm_goods g ON g.sid = n.goods_code AND g.dt = '$date' " +
         " where n.cdate = " + date + " and (isnotnull(g.brand_sid) and g.brand_sid <> 'null') "
 
-      val sellRDD = DataBaseUtil.getData(input, sqlSell, date, date, date, date).map { case Array(lev1, lev2, lev3, lev4, lev5, brand, productId, saleMoney, indexType) =>
-        ((lev1, lev2, lev3, lev4, lev5, brand, indexType), saleMoney.toDouble)
-      }.reduceByKey(_ + _).map(s => ((s._1._1, s._1._2, s._1._3, s._1._4, s._1._5, s._1._7), Seq((s._1._6, s._2 )))).reduceByKey(_ ++ _)
+      val sellRDD = DataBaseUtil.getData(input, sqlSell, date, date, date, date).map { case Array(lev1, lev2, lev3, lev4, lev5, channel, brand, productId, saleMoney, indexType) =>
+        ((lev1, lev2, lev3, lev4, lev5, channel, brand, indexType), saleMoney.toDouble)
+      }.reduceByKey(_ + _).map(s => ((s._1._1, s._1._2, s._1._3, s._1._4, s._1._5, s._1._6, s._1._8), Seq((s._1._7, s._2 )))).reduceByKey(_ ++ _)
         .map { case (l, brands) =>
           val min = brands.minBy(_._2)._2
           val max = brands.maxBy(_._2)._2
           val divider = if (max - min == 0.0) 1 else max - min
-          brands.map(s => ((l._1, l._2, l._3, l._4, l._5, s._1),
-            if (l._6 == "1")  40.0 * (s._2 - min) / divider else if ((l._6 == "2")) 30.0 * (s._2 - min) / divider else 0.0))
+          brands.map(s => ((l._1, l._2, l._3, l._4, l._5, l._6, s._1),
+            if (l._7 == "1")  40.0 * (s._2 - min) / divider else if ((l._7 == "2")) 30.0 * (s._2 - min) / divider else 0.0))
         }.flatMap(s => s)
 
       val result = spuRDD.union(sellRDD).reduceByKey(_ + _)
@@ -80,108 +80,112 @@ object CategoryBand {
       val hiveSql = SparkFactory.getHiveContext
       import hiveSql.implicits._
 
-      // (category, brand, score)
-      result.filter(_._1._5 != null).map(s => ((s._1._5, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      // (category, channel, brand, score)
+      result.filter(_._1._5 != null).map(s => ((s._1._5, s._1._6, s._1._7), s._2)).reduceByKey(_ + _).map(s => ((s._1._1, s._1._2), Seq((s._1._3, s._2))))
+        .reduceByKey(_ ++ _).map { case (lev, goods) =>
+          val max = goods.map(_._2).max
+          val min = goods.map(_._2).min
+          val divider = if (max - min == 0.0) 1 else max - min
+          goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+      }.flatMap(s => s)
+        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L5")
+
+
+      result.filter(_._1._4 != null).map(s => ((s._1._4, s._1._6, s._1._7), s._2)).reduceByKey(_ + _).map(s => ((s._1._1, s._1._2), Seq((s._1._3, s._2))))
+        .reduceByKey(_ ++ _).map { case (lev, goods) =>
         val max = goods.map(_._2).max
         val min = goods.map(_._2).min
         val divider = if (max - min == 0.0) 1 else max - min
         goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
       }.flatMap(s => s)
-        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L5")
+        .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L4")
 
 
-      result.filter(_._1._4 != null).map(s => ((s._1._4, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      result.filter(_._1._3 != null).map(s => ((s._1._3, s._1._6, s._1._7), s._2)).reduceByKey(_ + _).map(s => ((s._1._1, s._1._2), Seq((s._1._3, s._2))))
+        .reduceByKey(_ ++ _).map { case (lev, goods) =>
         val max = goods.map(_._2).max
         val min = goods.map(_._2).min
         val divider = if (max - min == 0.0) 1 else max - min
         goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
       }.flatMap(s => s)
-        .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L4")
+        .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L3")
 
 
-      result.filter(_._1._3 != null).map(s => ((s._1._3, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      result.filter(_._1._2 != null).map(s => ((s._1._2, s._1._6, s._1._7), s._2)).reduceByKey(_ + _).map(s => ((s._1._1, s._1._2), Seq((s._1._3, s._2)))).
+        reduceByKey(_ ++ _).map { case (lev, goods) =>
         val max = goods.map(_._2).max
         val min = goods.map(_._2).min
         val divider = if (max - min == 0.0) 1 else max - min
         goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
       }.flatMap(s => s)
-        .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L3")
+        .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L2")
 
 
-      result.filter(_._1._2 != null).map(s => ((s._1._2, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
-        val max = goods.map(_._2).max
-        val min = goods.map(_._2).min
-        val divider = if (max - min == 0.0) 1 else max - min
-        goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
+      result.filter(_._1._1 != null).map(s => ((s._1._1, s._1._6, s._1._7), s._2)).reduceByKey(_ + _).map(s => ((s._1._1, s._1._2), Seq((s._1._3, s._2)))).
+        reduceByKey(_ ++ _).map { case (lev, goods) =>
+          val max = goods.map(_._2).max
+          val min = goods.map(_._2).min
+          val divider = if (max - min == 0.0) 1 else max - min
+          goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
       }.flatMap(s => s)
-        .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L2")
-
-
-      result.filter(_._1._1 != null).map(s => ((s._1._1, s._1._6), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
-        val max = goods.map(_._2).max
-        val min = goods.map(_._2).min
-        val divider = if (max - min == 0.0) 1 else max - min
-        goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
-      }.flatMap(s => s)
-        .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L1")
+        .map(s => {val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore(s._1._1, s._1._2, s._2, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("L1")
 
 
 
       hiveSql.sql(s"insert overwrite table $hiveTableName partition(dt='$date')  " +
-        " select level, brand, score from L1 union all select level, brand, score from L2  " +
-        "union all select level, brand, score from L3 union all select level, brand, score from L4  " +
-        "union all select level, brand, score from L5 ")
+        s" select level, brand, score, '$date' , channel from L1 union all select level, brand, score, '$date' , channel from L2  " +
+        s" union all select level, brand, score, '$date' , channel  from L3 union all select level, brand, score, '$date' , channel from L4  " +
+        s" union all select level, brand, score, '$date' , channel  from L5 ")
 
       // (category, score)
       //    result.filter( _._1._1 != null).map(s => (s._1._1, s._2)).reduceByKey(_ + _)
       //      .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._1, decimalFormat.format(s._2).toDouble) }).toDF().registerTempTable("C1")
 
-      result.filter( s => s._1._1 != null && s._1._2 != null).map(s => ((s._1._1, s._1._2), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      result.filter( s => s._1._1 != null && s._1._2 != null).map(s => ((s._1._1, s._1._2, s._1._6), s._2)).reduceByKey(_ + _).
+        map(s => ((s._1._1, s._1._3), Seq((s._1._2, s._2)))).
+        reduceByKey(_ ++ _).map { case (lev, goods) =>
         val max = goods.map(_._2).max
         val min = goods.map(_._2).min
         val divider = if (max - min == 0.0) 1 else max - min
         goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
       }.flatMap(s => s)
-        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C2")
+        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1._2, s._1._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C2")
 
-      result.filter(s => s._1._2 != null && s._1._3 != null).map(s => ((s._1._2, s._1._3), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      result.filter(s => s._1._2 != null && s._1._3 != null).map(s => ((s._1._2, s._1._3, s._1._6), s._2)).reduceByKey(_ + _).
+        map(s => ((s._1._1, s._1._3), Seq((s._1._2, s._2)))).
+        reduceByKey(_ ++ _).map { case (lev, goods) =>
         val max = goods.map(_._2).max
         val min = goods.map(_._2).min
         val divider = if (max - min == 0.0) 1 else max - min
         goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
       }.flatMap(s => s)
-        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C3")
+        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1._2, s._1._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C3")
 
-      result.filter( s => s._1._3 != null && s._1._4 != null).map(s => ((s._1._3, s._1._4), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      result.filter( s => s._1._3 != null && s._1._4 != null).map(s => ((s._1._3, s._1._4, s._1._6), s._2)).reduceByKey(_ + _).
+        map(s => ((s._1._1, s._1._3), Seq((s._1._2, s._2)))).
+        reduceByKey(_ ++ _).map { case (lev, goods) =>
         val max = goods.map(_._2).max
         val min = goods.map(_._2).min
         val divider = if (max - min == 0.0) 1 else max - min
         goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
       }.flatMap(s => s)
-        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C4")
+        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1._2, s._1._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C4")
 
-      result.filter( s => s._1._4 != null && s._1._5 != null).map(s => ((s._1._4, s._1._5), s._2)).reduceByKey(_ + _).map(s => (s._1._1, s._1._2, s._2))
-        .map(s => (s._1, Seq((s._2, s._3)))).reduceByKey(_ ++ _).map { case (lev, goods) =>
+      result.filter( s => s._1._4 != null && s._1._5 != null).map(s => ((s._1._4, s._1._5, s._1._6), s._2)).reduceByKey(_ + _).
+        map(s => ((s._1._1, s._1._3), Seq((s._1._2, s._2)))).
+        reduceByKey(_ ++ _).map { case (lev, goods) =>
         val max = goods.map(_._2).max
         val min = goods.map(_._2).min
         val divider = if (max - min == 0.0) 1 else max - min
         goods.map(g => (lev, g._1, 100.0 * (g._2 - min) / divider ))
       }.flatMap(s => s)
-        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C5")
+        .map(s =>{val decimalFormat = new DecimalFormat(decimalFormatter); CategoryScore2(s._2, s._1._2, s._1._1, decimalFormat.format(s._3).toDouble) }).toDF().registerTempTable("C5")
 
       hiveSql.sql(s"insert overwrite table $hiveTableName2 partition(dt='$date')  " +
-        " select category, parentCate, score from C2 " +
-        "union all select category, parentCate, score from C3  " +
-        "union all select category, parentCate, score from C4  " +
-        "union all select category, parentCate, score from C5 ")
+        s" select category, parentCate, score, '$date', channel from C2 " +
+        s"union all select category, parentCate, score, '$date' , channel  from C3  " +
+        s"union all select category, parentCate, score, '$date' , channel from C4  " +
+        s"union all select category, parentCate, score, '$date' , channel from C5 ")
 
     Message.addMessage("=========  success !  =========")
 
@@ -205,8 +209,8 @@ object CategoryBand {
 
 }
 
-case class CategoryScore(level: String, brand: String, score: Double)
-case class CategoryScore2(category: String, parentCate: String, score: Double)
+case class CategoryScore(level: String, channel: String, brand: String, score: Double)
+case class CategoryScore2(category: String, channel: String, parentCate: String, score: Double)
 
 object CategoryScoreConf {
   val input = "input"
