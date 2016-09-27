@@ -846,7 +846,7 @@ object CategoryStatistic {
         if (r.isNullAt(3) || r.get(3).toString.equalsIgnoreCase("null")) 0.0 else r.getDouble(3),
         if (r.isNullAt(4) || r.get(4).toString.equalsIgnoreCase("null")) -1 else r.getInt(4),
         if (r.isNullAt(5) || r.get(5).toString.equalsIgnoreCase("null")) -1 else r.getInt(5)))
-    }.filter(s => !s._2._1.equalsIgnoreCase("null") && !s._2._2.equalsIgnoreCase("null")).distinct()
+    }.filter(s => s._2._1 != null && !s._2._1.equalsIgnoreCase("null") && s._2._2 != null && !s._2._2.equalsIgnoreCase("null")).distinct()
 
     val tmp0 = categoryRawRDD.join(goodsRawRDD0).map { case (cate, ((l1, l1Name, l2, l2Name, l3, l3Name, l4, l4Name, l5, l5Name), (goodsId, brandId, salePrice, saleStatus, stock))) =>
       Array(((l5, l5Name, 5, l4, l1Name + ">" + l2Name + ">" + l3Name + ">" + l4Name),  (1, if (saleStatus == 0) 1 else 0, if (stock == 0 && saleStatus == 4) 1 else 0, Set(brandId), salePrice, salePrice)),
