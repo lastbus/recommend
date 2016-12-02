@@ -33,7 +33,7 @@ public class ConsumerDemoJava
         consumer.subscribe(java.util.Arrays.asList(t));
         while (true)
         {
-            Iterator<ConsumerRecord> records = consumer.poll(Long.MAX_VALUE).iterator();
+            Iterator<ConsumerRecord> records = consumer.poll(100).iterator();
             while (records.hasNext())
             {
                 ConsumerRecord  record = records.next();

@@ -43,4 +43,14 @@ class HMSet {
 
   }
 
+  @Test
+  def test81 = {
+    val jedis = new Jedis("10.201.129.74", 6378)
+    Console println jedis.exists("rcmd_orig_h5_86907")
+    for (i <- 0 until 1000)
+    jedis.set("test" + i, "foo" + i)
+    jedis.close()
+
+  }
+
 }

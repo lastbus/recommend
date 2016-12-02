@@ -11,7 +11,7 @@ object Message {
     MailServer.send(message.toString())
   }
 
-  def addMessage(msg: String): Unit ={
+  def addMessage(msg: String): Unit = {
     message.append(msg)
     message.append("\n")
   }

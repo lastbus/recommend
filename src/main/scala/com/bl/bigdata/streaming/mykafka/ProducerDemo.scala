@@ -10,13 +10,13 @@ import org.apache.kafka.clients.producer.{RecordMetadata, ProducerRecord, KafkaP
 object ProducerDemo {
 
   def main(args: Array[String]) {
-    if (args.length < 2) {
-      println("please input kafka server url:port and topic")
-      sys.exit(-1)
-    }
-    val Array(url, topic) = args
+//    if (args.length < 2) {
+//      println("please input kafka server url:port and topic")
+//      sys.exit(-1)
+//    }
+//    val Array(url, topic) = args
     val props = new Properties()
-    props.put("bootstrap.servers", url)
+    props.put("bootstrap.servers", "10.201.129.75:9092")
     props.put("client.id", "DemoProducer")
     props.put("acks", "all")
     props.put("retries", "0")
@@ -25,11 +25,12 @@ object ProducerDemo {
     props.put("buffer.memory", "33554432")
     props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
     props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+    println("""0000""")
     val producer = new KafkaProducer[String, String](props)
 
     for (i <- 0 to 2000000000){
       try {
-        val metadata = producer.send(new ProducerRecord[String, String](topic, null, "foo" + i.toString),
+        val metadata = producer.send(new ProducerRecord[String, String]("recommend_trace", null, "foo" + i.toString),
         new Callback {
           override def onCompletion(metadata: RecordMetadata, exception: Exception): Unit = {
             if (metadata != null ) println("topic: " + metadata.topic() +  s"  message :  foo$i" + "   partition:  " + metadata.partition() + "  offset: " + metadata.offset() + "   value: ")
@@ -39,7 +40,7 @@ object ProducerDemo {
       } catch {
         case e: Throwable => println(e.getMessage)
       }
-      println("send " + i + " to " + url + " : " + topic)
+      println("send " + i)
       Thread.sleep(1000)
     }
 

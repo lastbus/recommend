@@ -114,7 +114,7 @@
         <value>
             select category_sid, cookie_id, event_date, behavior_type, goods_sid
             from recommendation.user_behavior_raw_data
-            where dt &gt;= '%s'
+            where dt &gt;= '%s' and instr(event_date, " ") >= 1
         </value>
     </sql>
 

@@ -6,8 +6,6 @@ import java.util.Date
 
 import com.bl.bigdata.mail.Message
 import com.bl.bigdata.util._
-import org.apache.spark.Accumulator
-import org.apache.spark.rdd.RDD
 
 /**
   * 计算用户购买的物品种类相似度
@@ -49,17 +47,19 @@ class CategorySimilarity extends Tool {
       val sdf = new SimpleDateFormat(optionsMap(CategorySimConf.sdf))
       val date0 = new Date
       val start = sdf.format(new Date(date0.getTime - 24000L * 3600 * limit))
-      val sql = "select category_sid, cookie_id, event_date, behavior_type, goods_sid " +
-        "from recommendation.user_behavior_raw_data  " +
-        s"where dt >= $start"
+      val sql = s"""
+           select category_sid, cookie_id, event_date, behavior_type, goods_sid
+           from recommendation.user_behavior_raw_data
+           where dt >= $start and instr(event_date, " ") >= 1
+        """.stripMargin
       val sql1 = optionsMap(CategorySimConf.sql_1)
       val userBehaviorRawDataRDD = DataBaseUtil.getData(input, sql1, start)
-      val buyGoodsRDD =userBehaviorRawDataRDD.filter(!_.contains(null))
-        .map{ case Array(category, cookie, date, behaviorId, goodsId) =>
-          (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}
-        .filter(_._2._3 == "4000")
-        .map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }
-        .distinct()
+      val buyGoodsRDD =userBehaviorRawDataRDD.filter(!_.contains(null)).
+        map{ case Array(category, cookie, date, behaviorId, goodsId) =>
+          (category, (cookie, date.substring(0, date.indexOf(" ")), behaviorId, goodsId))}.
+        filter(_._2._3 == "4000").
+        map { case (category, (cookie, date, behaviorID, goodsID)) => (category, (cookie, date, goodsID)) }.
+        distinct()
 
       val sql_test = "select category_id, level2_id from recommendation.dim_category"
       val sql2 = optionsMap(CategorySimConf.sql_2)

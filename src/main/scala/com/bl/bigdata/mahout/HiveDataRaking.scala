@@ -62,9 +62,9 @@ class HiveDataRaking extends Tool
     val sb = new StringBuilder()
     sb.append(" -s SIMILARITY_LOGLIKELIHOOD ")
     sb.append(" --numRecommendations 50  ")
-    sb.append(s" --input $tempOutput ")
-    sb.append(s" --output $output ")
-    sb.append(s"--tempDir $tempPath ")
+    sb.append(s" --input /tmp/dataset.csv ")
+    sb.append(s" --output /tmp/o1 ")
+    sb.append(s"--tempDir /tmp/o2 ")
     val args2 = sb.toString().split(" ").filter(_.length > 1)
     job.run(args2)
 

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <sql>
+        <name>browser</name>
+        <value>
+            select u.cookie_id, u.category_sid, u.event_date, u.behavior_type, u.goods_sid, g.store_sid
+            from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid and g.sale_status = 4
+            where dt &gt;= '%s'
+        </value>
+    </sql>
+    <sql>
+        <name>see.buy</name>
+        <value>
+            select u.cookie_id, u.category_sid, u.event_date, u.behavior_type, u.goods_sid, g.store_sid
+            from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid and g.sale_status = 4
+            where u.dt &gt;= '%s'
+        </value>
+    </sql>
+    <sql>
+        <name>search.category.0</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,
+                    g.brand_sid, g.pro_sid
+            FROM idmdata.dim_search_category c
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '%s' </value>
+    </sql>
+
+    <sql>
+        <name>search.category.1</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,
+                    g.brand_sid, g.pro_sid, n.sale_cum_amount, n.index_type
+            FROM idmdata.m_sr_eg_goods_num_amount n
+            INNER JOIN idmdata.dim_search_category c ON c.goods_sid = n.goods_code
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON g.sid = n.goods_code AND g.dt = '%s'
+            where n.cdate = '%s'
+        </value>
+    </sql>
+    <sql>
+        <name>buy.goods.sim-1</name>
+        <value>
+            select u.category_sid, u.cookie_id, u.event_date, u.behavior_type, u.goods_sid, g.store_sid
+            from recommendation.user_behavior_raw_data u  inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid  and g.sale_status = 4
+            where u.dt &gt;= '%s'
+        </value>
+    </sql>
+    <sql>
+        <name>buy.goods.sim-2</name>
+        <value>select category_id, level2_id from recommendation.dim_category</value>
+    </sql>
+    <sql>
+        <name>user.behavior.raw.data</name>
+        <value>
+            select category_sid, cookie_id, event_date, behavior_type, goods_sid
+            from recommendation.user_behavior_raw_data
+            where dt &gt;= '%s'
+        </value>
+    </sql>
+    <sql>
+        <name>dim.category</name>
+        <value>select category_id, level2_id from recommendation.dim_category</value>
+    </sql>
+    <sql>
+        <name>buy.activity.statistic</name>
+        <value>select category_sid, event_date, behavior_type from recommendation.user_behavior_raw_data  where dt &gt;= %s</value>
+    </sql>
+
+    <sql>
+        <name>browser.not.buy</name>
+        <value>
+            select cookie_id, event_date, behavior_type, category_sid, goods_sid
+            from recommendation.user_behavior_raw_data
+            where dt &gt;= %s  and instr(event_date, " ") >= 1
+        </value>
+    </sql>
+    <sql>
+        <name>hot.sale</name>
+        <value>
+            select u.goods_sid, u.goods_name, u.quanlity, u.event_date, u.category_sid, g.store_sid
+            from recommendation.user_behavior_raw_data u inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = u.goods_sid
+            where u.dt >= %s
+        </value>
+    </sql>
+
+    <sql>
+        <name>search.category.score.spu</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,
+                    bd.sid, g.pro_sid
+            FROM idmdata.dim_search_category c
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON c.goods_sid = g.sid  AND g.dt = '%s' and isnotnull(g.brand_sid) and g.brand_sid  &lt;&gt; 'null'
+            INNER JOIN sourcedata.s06_pcm_brand_relation br on g.brand_sid = br.brand_sid AND br.dt = '%s'
+            INNER JOIN sourcedata.s06_pcm_brand_display bd on bd.sid = br.brand_display_sid AND bd.dt = '%s'
+            WHERE isnotnull(bd.sid) AND bd.sid &lt;&gt; 'null' AND isnotnull(c.channel_sid) AND c.channel_sid &lt;&gt; 'null'
+        </value>
+    </sql>
+
+    <sql>
+        <name>search.category.score.sell</name>
+        <value>
+            SELECT  c.lev1_sid, c.lev2_sid, c.lev3_sid, c.lev4_sid, c.lev5_sid, c.channel_sid,
+                    bd.sid, g.pro_sid, n.sale_cum_amount, n.index_type
+            FROM idmdata.m_sr_eg_goods_num_amount n
+            INNER JOIN idmdata.dim_search_category c ON c.goods_sid = n.goods_code
+            INNER JOIN sourcedata.s06_pcm_mdm_goods g ON g.sid = n.goods_code AND g.dt = '%s'
+            INNER JOIN sourcedata.s06_pcm_brand_relation br ON br.brand_sid = g.brand_sid AND br.dt = '%s'
+            INNER JOIN sourcedata.s06_pcm_brand_display bd ON bd.sid = br.brand_display_sid AND bd.dt = '%s'
+            where n.cdate = '%s'  AND isnotnull(g.brand_sid) AND g.brand_sid &lt;&gt; 'null' AND isnotnull(c.channel_sid) AND c.channel_sid &lt;&gt; 'null'
+        </value>
+    </sql>
+
+    <sql>
+        <name>cate.similarity</name>
+        <value>
+            select category_sid, cookie_id, event_date, behavior_type, goods_sid
+            from recommendation.user_behavior_raw_data
+            where dt &gt;= '%s' and instr(event_date, " ") >= 1
+        </value>
+    </sql>
+
+    <sql>
+        <name>goods.for.sale</name>
+        <value>select sid, category_id, store_sid from recommendation.goods_avaialbe_for_sale_channel where sale_status = 4 and stock = 1 </value>
+    </sql>
+
+    <sql>
+        <name>goods.similarity.in.cate</name>
+        <value>
+            select p.sid, p.mdm_goods_sid, p.category_id, p.brand_sid, p.sale_price, p.value_sid, g.store_sid
+            from recommendation.product_properties_raw_data p inner join recommendation.goods_avaialbe_for_sale_channel g on g.sid = p.sid
+        </value>
+    </sql>
+
+    <sql>
+        <name>merchant.shop.goods</name>
+        <value>select sid, store_sid  from recommendation.goods_avaialbe_for_sale_channel where store_sid &lt;&gt; 'null' and  sale_status = 4 and stock = 1 </value>
+    </sql>
+</configuration>

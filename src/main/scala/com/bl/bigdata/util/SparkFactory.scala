@@ -18,7 +18,6 @@ object SparkFactory {
       sc = new SparkContext(sparkConf)
       Message.addMessage("application-id:\t" + sc.applicationId)
       Message.addMessage("application-master:\t" + sc.master)
-
       sc
     } else sc
 
