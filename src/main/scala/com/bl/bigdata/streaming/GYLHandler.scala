@@ -21,6 +21,10 @@ object GYLHandler {
   val columnBytes = Bytes.toBytes("gyl")
   val sdf = new SimpleDateFormat("yyyyMMdd")
 
+  /**
+    * 解析 json 字符串
+    * @param json
+    */
   def handler(json: JSONObject): Unit = {
     val memberId = json.getString("memberId")
     if (memberId == null || memberId.length == 0 || memberId.equalsIgnoreCase("NULL")) return

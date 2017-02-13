@@ -17,7 +17,9 @@ import redis.clients.jedis.{HostAndPort, JedisCluster, JedisPool}
   */
 object RedisClient extends Serializable {
   val logger = LogManager.getLogger(this.getClass.getName)
+  // redis cluster mode
   val cluster: String = "cluster"
+  // redis standalone mode
   val standalone: String = "standalone"
 
   lazy val confProperties = {
@@ -60,7 +62,12 @@ object RedisClient extends Serializable {
     new JedisCluster(sets)
   }
 
-  /** export key-value pair to redis */
+  /**
+    * export key-value pair to redis
+    * @param kv  待保存的rdd
+    * @param accumulator  统计保存的 k-v 数量
+    * @param redisType redis 的模式，“cluster” 或者 “standalone”
+    */
   def sparkKVToRedis(kv: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String): Unit = {
     kv.foreachPartition(partition => {
       try {
@@ -85,7 +92,13 @@ object RedisClient extends Serializable {
     })
   }
 
-  /** export key-value pair to redis */
+  /**
+    * export key-value pair to redis
+    * @param kv  待保存的rdd
+    * @param accumulator  统计保存的 k-v 数量
+    * @param redisType redis 的模式，“cluster” 或者 “standalone”
+    * @param expireTime  过期时间
+    */
   def sparkKVToRedis(kv: RDD[(String, String)], accumulator: Accumulator[Int], redisType: String, expireTime: Int): Unit = {
     kv.foreachPartition(partition => {
       try {
@@ -111,7 +124,12 @@ object RedisClient extends Serializable {
   }
 
 
-  /** export hash value to redis */
+  /**
+    * export key-hash to redis
+    * @param kv  待保存的rdd
+    * @param accumulator  统计保存的 k-v 数量
+    * @param redisType redis 的模式，“cluster” 或者 “standalone”
+    */
   def sparkHashToRedis(kv: RDD[(String, util.HashMap[String, String])], accumulator: Accumulator[Int], redisType: String): Unit = {
     kv.foreachPartition(partition => {
       try {
@@ -136,7 +154,13 @@ object RedisClient extends Serializable {
     })
   }
 
-  /** export hash value to redis */
+  /**
+    * export key-hash to redis
+    * @param kv  待保存的rdd
+    * @param accumulator  统计保存的 k-v 数量
+    * @param redisType redis 的模式，“cluster” 或者 “standalone”
+    * @param ttl  过期时间
+    */
   def sparkHashToRedis(kv: RDD[(String, util.HashMap[String, String])], accumulator: Accumulator[Int], redisType: String, ttl: Int): Unit = {
     kv.foreachPartition(partition => {
       try {

@@ -17,14 +17,14 @@ object ConsumerDemo {
     }
 //    val Array(host, groupID, topic) = args
     val props = new Properties()
-    props.put("bootstrap.servers", "10.201.129.74:9092")
+    props.put("bootstrap.servers", "10.201.129.75:9092")
     props.put("group.id", "test")
     props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     val consumer = new KafkaConsumer[String, String](props)
 
     val topics = "priceTopic fastGoGoodsTopic activesTopic brandTopic stockTopic pictrueTopic marketonTopic basketTopic productTopic"
-    consumer.subscribe(util.Arrays.asList("menuClickTopic"))
+    consumer.subscribe(util.Arrays.asList("my-topic"))
     while (true)
     {
       val records = consumer.poll(100000000L).iterator()

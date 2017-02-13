@@ -29,6 +29,10 @@ object MailServer {
     }
   }
 
+  /**
+    * 发送邮件
+    * @param message 邮件内容
+    */
   def send(message: String): Unit = {
     if (mailProps == null) {
       println("no mail properties file found, exit.")
@@ -42,6 +46,10 @@ object MailServer {
     email.send
   }
 
+  /**
+    * 得到发送邮件类 SimpleEmail
+    * @return
+    */
   def getEmail(): SimpleEmail = {
     val email = new SimpleEmail
     email.setHostName(mailProps.getProperty("mail.host"))

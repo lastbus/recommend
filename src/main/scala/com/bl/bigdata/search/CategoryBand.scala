@@ -19,7 +19,7 @@ object CategoryBand {
       CategoryScoreConf.parser(args)
     }catch {
       case e: Throwable =>
-        Message.addMessage("parse args encouter error")
+        Message.addMessage("parse args encounter error")
         Message.addMessage(e.toString)
         Message.sendMail
         sys.exit(-1)

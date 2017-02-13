@@ -31,7 +31,12 @@ private[bigdata] object SqlFactory {
     sqls.toMap
   }
 
-  /* 根据 sql 的名字获取配置文件中的 sql，并传入 sql 中的动态参数**/
+  /**
+    * 根据 sql 的名字获取配置文件中的 sql
+    * @param sqlName  配置文件中的 sql 名称
+    * @param parameters sql 中的参数
+    * @return sql
+    */
   def getSql(sqlName: String, parameters: String*): String =  {
     val sql = sqlMap(sqlName)
     if (parameters.isEmpty) sql else String.format(sql, parameters: _*)

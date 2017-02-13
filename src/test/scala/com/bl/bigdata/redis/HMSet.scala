@@ -1,7 +1,7 @@
 package com.bl.bigdata.redis
 
 import java.util
-import java.util.HashMap
+import java.util.{Collections, HashMap}
 
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig
 import org.junit.Test
@@ -32,6 +32,15 @@ class HMSet {
     if (jedis.exists("test")) jedis.del("test")
     jedis.hmset("test", map2)
     println("====")
+
+    val a = new java.util.ArrayList[Int]
+    a.add(0)
+    a.add(10)
+    a.add(2)
+    a.add(9)
+    import scala.collection.JavaConversions._
+
+    Collections.shuffle(a)
 
 
   }
